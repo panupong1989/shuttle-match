@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Shuttle·Match — จับคู่ตีแบต</title>
+<meta name="theme-color" content="#0A1A24" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Shuttle Match" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body {
+    font-family: 'Noto Sans Thai', 'Sarabun', system-ui, sans-serif;
+    background: radial-gradient(900px 500px at 50% -10%, rgba(198,255,74,0.10), transparent 60%), #0A1A24;
+    color: #E9F1EC; min-height: 100vh;
+    padding: max(18px, env(safe-area-inset-top)) 14px calc(60px + env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .disp { font-family: 'Oswald', sans-serif; letter-spacing: .04em; }
+  .eyebrow { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.22em; font-size:11px; color:#7E97A0; }
+  .h1 { font-family:'Oswald',sans-serif; font-weight:700; font-size:30px; line-height:1; margin:2px 0 0; }
+  .h1 .x { color:#C6FF4A; }
+  .card { background:#102A33; border:1px solid rgba(233,241,236,.16); border-radius:14px; padding:14px; }
+  .section-label { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.18em; font-size:12px; color:#7E97A0; margin:22px 4px 8px; }
+  .btn { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; border:none; border-radius:11px; padding:13px 16px; cursor:pointer; font-size:14px; width:100%; transition:transform .06s ease, filter .15s ease; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background:#C6FF4A; color:#0a1411; }
+  .btn-ghost { background:transparent; color:#E9F1EC; border:1px solid rgba(233,241,236,.16); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .input { font-family:inherit; background:#0E222B; border:1px solid rgba(233,241,236,.16); color:#E9F1EC; border-radius:10px; padding:11px 12px; font-size:15px; width:100%; }
+  .input::placeholder { color:#7E97A0; }
+  .chip { font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; width:22px; height:22px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .chip-m { background:rgba(56,189,248,.18); color:#38BDF8; border:1px solid rgba(56,189,248,.4); }
+  .chip-f { background:rgba(251,113,133,.18); color:#FB7185; border:1px solid rgba(251,113,133,.4); }
+  .prow { display:flex; align-items:center; gap:9px; padding:8px 4px; border-bottom:1px solid rgba(233,241,236,.16); }
+  .prow:last-child { border-bottom:none; }
+  .pname { flex:1; font-size:15px; }
+  .toggle { font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:7px; padding:5px 9px; cursor:pointer; border:1px solid rgba(233,241,236,.16); background:transparent; color:#7E97A0; }
+  .toggle.on { background:#C6FF4A; color:#0a1411; border-color:#C6FF4A; }
+  .del { background:none; border:none; color:#7E97A0; cursor:pointer; font-size:18px; line-height:1; padding:2px 6px; }
+  .seg { display:flex; gap:6px; background:#0E222B; border:1px solid rgba(233,241,236,.16); border-radius:11px; padding:5px; }
+  .seg button { flex:1; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.06em; font-size:12px; border:none; border-radius:8px; padding:9px 6px; cursor:pointer; background:transparent; color:#7E97A0; }
+  .seg button.on { background:#C6FF4A; color:#0a1411; font-weight:700; }
+  .scorebar { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:12px; }
+  .roundnum { font-family:'Oswald',sans-serif; font-weight:700; font-size:46px; line-height:.85; color:#C6FF4A; }
+  .pair { background:#0E222B; border:1px solid rgba(233,241,236,.16); border-radius:12px; padding:11px 12px; margin-bottom:9px; }
+  .pair.mixed { border-color:rgba(198,255,74,.35); }
+  .pair.same { border-style:dashed; }
+  .pairtop { display:flex; align-items:center; gap:8px; }
+  .pairidx { font-family:'Oswald',sans-serif; font-weight:700; color:#7E97A0; font-size:15px; width:20px; }
+  .side { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
+  .side .nm { font-size:15px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .net { width:2px; align-self:stretch; background:repeating-linear-gradient(rgba(233,241,236,.16) 0 3px, transparent 3px 6px); margin:0 4px; }
+  .tag { font-family:'Oswald',sans-serif; font-size:9.5px; text-transform:uppercase; letter-spacing:.12em; margin-top:6px; color:#7E97A0; }
+  .tag .ok { color:#C6FF4A; }
+  .tag .warn { color:#FB7185; }
+  .bye { display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.03); border:1px dashed rgba(233,241,236,.16); border-radius:12px; padding:11px 12px; margin-top:6px; }
+  .banner { border-radius:11px; padding:10px 12px; font-size:13.5px; margin-bottom:10px; background:rgba(251,113,133,.12); border:1px solid rgba(251,113,133,.4); color:#FB7185; }
+  .stat { display:flex; gap:14px; margin-top:10px; }
+  .stat div span { font-family:'Oswald',sans-serif; font-weight:700; font-size:20px; display:block; }
+  .stat div small { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#7E97A0; }
+  .empty { color:#7E97A0; font-size:14px; text-align:center; padding:18px 8px; line-height:1.6; }
+  .row2 { display:flex; gap:9px; }
+  .grow { flex:1; }
+  .mt8{margin-top:8px}.mt9{margin-top:9px}.mt10{margin-top:10px}.mt12{margin-top:12px}.mt16{margin-top:16px}
+  /* collapsible "วิธีทำงาน" */
+  .collapse-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .collapse-btn .arrow { transition:transform .2s ease; font-size:12px; }
+  .collapse-btn.open .arrow { transform:rotate(180deg); }
+  /* lineup / ลงสนาม */
+  .stepper { display:flex; align-items:center; gap:8px; }
+  .stepper button { font-family:'Oswald',sans-serif; font-weight:700; font-size:18px; width:34px; height:34px; border-radius:9px; border:1px solid rgba(233,241,236,.16); background:#0E222B; color:#C6FF4A; cursor:pointer; flex:0 0 auto; }
+  .stepper .val { font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; min-width:30px; text-align:center; }
+  .court { background:#0E222B; border:1px solid rgba(198,255,74,.30); border-radius:12px; padding:11px 12px; margin-bottom:9px; }
+  .court .ch { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.12em; font-size:11px; color:#C6FF4A; margin-bottom:8px; }
+  .team { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.03); border:1px solid rgba(233,241,236,.16); border-radius:9px; padding:8px 10px; }
+  .team .nm { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .team .plus { color:#7E97A0; margin:0 2px; }
+  .vs { text-align:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; color:#7E97A0; letter-spacing:.12em; padding:5px 0; }
+  .qrow { display:flex; align-items:center; gap:9px; padding:5px 0; }
+  .qrow .pairidx { width:20px; }
+  /* view toggle / คิดเงิน */
+  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:30; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .ilabel { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10px; color:#7E97A0; margin:0 2px 4px; }
+  .ppick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .ppick .toggle { width:auto; }
+  .res-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid rgba(233,241,236,.16); font-size:14px; }
+  .res-row:last-child { border-bottom:none; }
+  .res-row .amt { font-family:'Oswald',sans-serif; font-weight:700; }
+</style>
+</head>
+<body>
+<button class="menu-btn" id="menuBtn" aria-label="สลับวิว"><span id="menuBtnIcon">☰</span><span id="menuBtnLabel">คิดเงิน</span></button>
+
+<div class="wrap" id="billView" style="display:none">
+  <div class="eyebrow">Split the bill · ค่าก๊วน</div>
+  <div class="h1">คิด<span class="x">·</span>เงิน</div>
+  <div id="billRounds" class="mt16"></div>
+  <button class="btn btn-ghost" id="addBillRound" style="margin-top:10px">+ เพิ่มรอบ</button>
+  <button class="btn btn-primary mt9" id="calcBillBtn">💵 คิดเงิน</button>
+  <div id="billResult"></div>
+</div>
+
+<div class="wrap" id="mainView">
+  <div class="eyebrow">Badminton · จับคู่ตีแบต</div>
+  <div class="h1">SHUTTLE<span class="x">·</span>MATCH</div>
+
+  <div class="section-label" id="rosterLabel">ผู้เล่น</div>
+  <div class="card">
+    <div class="row2" style="margin-bottom:10px">
+      <input class="input grow" id="nameInput" placeholder="ชื่อผู้เล่น" />
+      <button class="toggle on" id="genderBtn" style="width:46px;font-size:14px">ช</button>
+    </div>
+    <button class="btn btn-ghost" id="addBtn">+ เพิ่มผู้เล่น</button>
+    <div id="rosterList" class="mt12"></div>
+  </div>
+
+  <button class="toggle" id="backupToggle" style="width:100%;margin-top:8px;padding:8px;display:none">สำรอง / กู้คืนรายชื่อ</button>
+  <div class="card mt8" id="backupBox" style="background:#0E222B;display:none">
+    <div class="tag" style="margin-top:0;margin-bottom:8px">กันลืม: เก็บโค้ดไว้ในแชท LINE ตัวเอง แล้ววางกลับมากู้คืนได้ทุกเครื่อง</div>
+    <button class="btn btn-ghost" id="exportBtn" style="margin-bottom:9px">📋 คัดลอกโค้ดสำรอง</button>
+    <div class="row2">
+      <input class="input grow" id="importInput" placeholder="วางโค้ดที่สำรองไว้..." />
+      <button class="toggle on" id="importBtn" style="padding:0 14px">กู้คืน</button>
+    </div>
+    <div class="tag" id="backupMsg" style="color:#C6FF4A;margin-top:8px;display:none"></div>
+  </div>
+
+  <div class="section-label">โหมดจับคู่</div>
+  <div class="seg">
+    <button id="modeRule" class="on">ตามกติกา (ผสมก่อน)</button>
+    <button id="modeFree">ตามยถากรรม</button>
+  </div>
+
+  <div id="hints"></div>
+
+  <div class="section-label">จับคู่</div>
+  <button class="btn btn-primary" id="rollBtn">🎲 สุ่มคู่</button>
+  <div class="row2 mt9">
+    <button class="btn btn-ghost grow" id="undoBtn">↶ ลบรอบล่าสุด</button>
+    <button class="btn btn-ghost grow" id="newSessionBtn">⟲ session ใหม่</button>
+  </div>
+
+  <div id="draftBox"></div>
+  <div id="lineupBox"></div>
+  <div id="historyBox"></div>
+
+  <button class="toggle collapse-btn" id="howToggle" style="width:100%;margin-top:28px;padding:11px 14px">
+    <span>วิธีทำงาน</span><span class="arrow">▾</span>
+  </button>
+  <div class="card mt8" id="howBox" style="background:#0E222B;display:none;font-size:13px;line-height:1.7">
+    <div style="padding:3px 0;border-bottom:1px solid rgba(233,241,236,.16)"><b style="color:#C6FF4A">ตามกติกา</b> — เน้นจับคู่ผสม (ช-ญ) ให้ได้มากที่สุด ถ้าเพศไหนเหลือเกินค่อยจับกันเอง (ช-ช หรือ ญ-ญ) เช่น 4ญ 2ช → ได้ผสม 2 คู่ + ญ-ญ 1 คู่</div>
+    <div style="padding:3px 0;border-bottom:1px solid rgba(233,241,236,.16)"><b style="color:#C6FF4A">ตามยถากรรม</b> — สุ่มล้วน ไม่สนเพศ ใครเจอใครก็คู่กัน</div>
+    <div style="padding:3px 0">กด <b>"session ใหม่"</b> เพื่อล้างประวัติ แล้วเริ่มให้จับคู่ซ้ำได้ใหม่ (รายชื่อยังอยู่ครบ)</div>
+  </div>
+</div>
+
+<script>
+/* ---------------- state ---------------- */
+const KEY = 'shuttlematch:v1';
+function load(){ try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch { return null; } }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+let S = load() || { roster:[], present:[], history:[], rounds:[], byeCounts:{}, freeMode:false };
+// backward-compatible defaults for new features
+if(typeof S.courtCount !== 'number') S.courtCount = 2;
+if(!('lineup' in S)) S.lineup = null;
+if(!S.billing) S.billing = { rounds:[] };
+let draft = null;
+let gender = 'M';
+
+/* ---------------- helpers ---------------- */
+const uid = () => Math.random().toString(36).slice(2,9);
+const pairKey = (a,b) => [a,b].sort().join('|');
+function shuffle(a){ const r=a.slice(); for(let i=r.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [r[i],r[j]]=[r[j],r[i]]; } return r; }
+const countG = (arr,g) => arr.filter(p=>p.gender===g).length;
+
+function encRoster(roster){ const slim=roster.map(p=>({n:p.name,g:p.gender})); return btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(slim)))); }
+function decRoster(code){ const arr=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(code.trim()),c=>c.charCodeAt(0)))); return arr.map(x=>({id:uid(),name:x.n,gender:x.g==='F'?'F':'M'})); }
+
+/* ---------------- matching ---------------- */
+function greedy(pool, hist, free){
+  const n = pool.length; const used = new Array(n).fill(false); const pairs = [];
+  let mixed=0, same=0;
+  for(let i=0;i<n;i++){
+    if(used[i]) continue; const A=pool[i]; let j=-1;
+    if(!free){
+      for(let k=i+1;k<n;k++) if(!used[k] && pool[k].gender!==A.gender && !hist.has(pairKey(A.id,pool[k].id))){ j=k; break; }
+      if(j<0) for(let k=i+1;k<n;k++) if(!used[k] && !hist.has(pairKey(A.id,pool[k].id))){ j=k; break; }
+    } else {
+      for(let k=i+1;k<n;k++) if(!used[k] && !hist.has(pairKey(A.id,pool[k].id))){ j=k; break; }
+    }
+    if(j<0) continue; // หาคู่ใหม่ไม่ได้ -> พักรอ (ไม่จับซ้ำ)
+    const B=pool[j]; used[i]=used[j]=true;
+    const isMixed = A.gender!==B.gender; if(isMixed)mixed++; else same++;
+    pairs.push({a:A,b:B,mixed:isMixed});
+  }
+  const byes = pool.filter((_,i)=>!used[i]);
+  return { pairs, mixed, same, byes, matched: pairs.length*2 };
+}
+function generateRound(present, historyArr, byeCounts, free){
+  const hist = new Set(historyArr); const n = present.length; if(n<2) return null;
+  let best=null, bestScore=-Infinity; const ATTEMPTS = n<=14?5000:2200;
+  for(let t=0;t<ATTEMPTS;t++){
+    const arr = shuffle(present); const m = greedy(arr, hist, free);
+    const benchSum = m.byes.reduce((s,p)=>s+(byeCounts[p.id]||0),0);
+    const score = m.matched*1e9 + (free?0:m.mixed)*1e3 - benchSum*10;
+    if(score>bestScore){ bestScore=score; best=m; }
+  }
+  return best;
+}
+
+/* ---------------- derived ---------------- */
+const presentPlayers = () => S.roster.filter(p=>S.present.includes(p.id));
+const chip = g => `<span class="chip ${g==='M'?'chip-m':'chip-f'}">${g==='M'?'ช':'ญ'}</span>`;
+const esc = s => s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------------- render ---------------- */
+function renderRoster(){
+  const pp = presentPlayers(); const m=countG(pp,'M'), f=countG(pp,'F');
+  document.getElementById('rosterLabel').textContent = `ผู้เล่น · มาวันนี้ ${pp.length} คน (${m}ช / ${f}ญ)`;
+  const list = document.getElementById('rosterList');
+  list.innerHTML = S.roster.map(p=>{
+    const on = S.present.includes(p.id);
+    return `<div class="prow" style="opacity:${on?1:0.45}" data-id="${p.id}">
+      ${chip(p.gender)}<span class="pname">${esc(p.name)}</span>
+      <button class="toggle ${on?'on':''}" data-act="toggle">${on?'มา':'ไม่มา'}</button>
+      <button class="del" data-act="del">×</button></div>`;
+  }).join('');
+  document.getElementById('backupToggle').style.display = S.roster.length?'block':'none';
+  document.getElementById('backupBox').style.display = (S.roster.length && backupOpen)?'block':'none';
+}
+function renderHints(){
+  const el = document.getElementById('hints'); const pp = presentPlayers();
+  if(S.freeMode || pp.length<2){ el.innerHTML=''; return; }
+  const m=countG(pp,'M'), f=countG(pp,'F');
+  const mixed=Math.min(m,f), same=Math.abs(m-f)>>1, bye=pp.length%2;
+  el.innerHTML = `<div class="card mt10" style="background:#0E222B">
+    <div class="tag" style="margin-top:0">รอบนี้คาดว่าจะได้</div>
+    <div class="stat">
+      <div><span style="color:#C6FF4A">${mixed}</span><small>คู่ผสม</small></div>
+      <div><span style="color:${same?'#E9F1EC':'#7E97A0'}">${same}</span><small>คู่เพศเดียว</small></div>
+      <div><span style="color:${bye?'#E9F1EC':'#7E97A0'}">${bye}</span><small>คนพัก</small></div>
+    </div></div>`;
+}
+function renderMode(){
+  document.getElementById('modeRule').classList.toggle('on', !S.freeMode);
+  document.getElementById('modeFree').classList.toggle('on', S.freeMode);
+  document.getElementById('rollBtn').textContent = `🎲 สุ่มคู่รอบ ${S.rounds.length+1}`;
+}
+function renderDraft(){
+  const box = document.getElementById('draftBox');
+  if(!draft){ box.innerHTML=''; return; }
+  const pp = presentPlayers();
+  const extraByes = Math.max(0, draft.byes.length - (pp.length%2));
+  const head = S.freeMode
+    ? `คู่ <span class="ok">${draft.pairs.length}</span> · <span class="ok">ไม่ซ้ำคู่</span>`
+    : `ผสม <span class="ok">${draft.mixed}</span> · เพศเดียว ${draft.same} · <span class="ok">ไม่ซ้ำคู่</span>`;
+  let html = `<div class="card mt16">
+    <div class="scorebar">
+      <div><div class="eyebrow">รอบ${S.freeMode?' · ตามยถากรรม':''}</div><div class="roundnum">${String(S.rounds.length+1).padStart(2,'0')}</div></div>
+      <div style="text-align:right"><div class="tag" style="margin-top:0">${head}</div></div>
+    </div>`;
+  if(extraByes>0) html += `<div class="banner">คู่ใหม่ไม่พอแล้ว มี ${extraByes} คนต้องพักรอเพราะจับกับใครก็ซ้ำหมด — กด “session ใหม่” เพื่อรีเซ็ตประวัติคู่</div>`;
+  draft.pairs.forEach((p,i)=>{
+    html += `<div class="pair ${p.mixed?'mixed':'same'}">
+      <div class="pairtop"><span class="pairidx">${i+1}</span>
+        <div class="side">${chip(p.a.gender)}<span class="nm">${esc(p.a.name)}</span></div>
+        <div class="net"></div>
+        <div class="side" style="justify-content:flex-end"><span class="nm" style="text-align:right">${esc(p.b.name)}</span>${chip(p.b.gender)}</div>
+      </div>
+      ${!S.freeMode?`<div class="tag">${p.mixed?'<span class="ok">คู่ผสม</span>':'เพศเดียวกัน (คนเกิน)'}</div>`:''}
+    </div>`;
+  });
+  draft.byes.forEach(b=>{ html += `<div class="bye">${chip(b.gender)}<span class="pname">${esc(b.name)}</span><span class="tag" style="margin-top:0">นั่งพักรอบนี้</span></div>`; });
+  html += `<div class="row2 mt12">
+      <button class="btn btn-ghost grow" id="rerollBtn">🔄 สุ่มใหม่</button>
+      <button class="btn btn-ghost grow" id="copyBtn">📋 คัดลอกลง LINE</button>
+    </div>
+    <button class="btn btn-primary mt9" id="commitBtn">✓ ใช้รอบนี้</button></div>`;
+  box.innerHTML = html;
+  document.getElementById('rerollBtn').onclick = roll;
+  document.getElementById('copyBtn').onclick = copyDraft;
+  document.getElementById('commitBtn').onclick = commit;
+}
+let historyOpen = false;
+function renderHistory(){
+  const box = document.getElementById('historyBox');
+  const old = S.rounds.slice(0, -1); // ไม่นับรอบล่าสุด (อยู่ในกระดานลงสนามแล้ว)
+  if(!old.length){ box.innerHTML=''; return; }
+  let html = `<button class="toggle collapse-btn ${historyOpen?'open':''}" id="histToggle" style="width:100%;margin-top:22px;padding:11px 14px">
+      <span>📋 ประวัติรอบก่อนหน้า (${old.length})</span><span class="arrow">▾</span>
+    </button>
+    <div id="histBox" style="display:${historyOpen?'block':'none'};margin-top:9px">`;
+  old.slice().reverse().forEach(r=>{
+    html += `<div class="card" style="margin-bottom:9px;padding:12px">
+      <div class="disp" style="color:#7E97A0;font-size:13px;margin-bottom:6px">ROUND ${String(r.n).padStart(2,'0')}${r.free?' · ตามยถากรรม':''}</div>`;
+    r.pairs.forEach((p,i)=>{ const dim=(!r.free && !p.mixed); html += `<div style="font-size:14px;padding:3px 0;color:${dim?'#7E97A0':'#E9F1EC'}">${i+1}. ${esc(p.a.name)} + ${esc(p.b.name)}${dim?' · เพศเดียว':''}</div>`; });
+    if(r.byes && r.byes.length) html += `<div style="font-size:13px;color:#7E97A0;margin-top:4px">พัก: ${r.byes.map(b=>esc(b.name)).join(', ')}</div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+  box.innerHTML = html;
+  document.getElementById('histToggle').onclick = function(){
+    historyOpen = !historyOpen;
+    document.getElementById('histBox').style.display = historyOpen?'block':'none';
+    this.classList.toggle('open', historyOpen);
+  };
+}
+/* ---------------- ลงสนาม (court queue) ---------------- */
+function currentTeams(){
+  const r = S.rounds[S.rounds.length-1];
+  if(!r || !r.pairs || !r.pairs.length) return null;
+  return r.pairs.map(p=>({ a:p.a, b:p.b, mixed:p.mixed, key:pairKey(p.a.id,p.b.id) }));
+}
+function orderedTeams(teams){
+  const n = S.rounds[S.rounds.length-1].n;
+  let order;
+  if(S.lineup && S.lineup.n===n && Array.isArray(S.lineup.order)){
+    const valid = S.lineup.order.filter(k=>teams.some(t=>t.key===k));
+    const missing = teams.filter(t=>!valid.includes(t.key)).map(t=>t.key);
+    order = valid.concat(missing);
+  } else {
+    order = teams.map(t=>t.key);
+  }
+  S.lineup = { n, order };
+  return order.map(k=>teams.find(t=>t.key===k));
+}
+function teamHTML(t){
+  return `<div class="team">${chip(t.a.gender)}<span class="nm">${esc(t.a.name)}</span><span class="plus">+</span>${chip(t.b.gender)}<span class="nm">${esc(t.b.name)}</span></div>`;
+}
+function renderLineup(){
+  const box = document.getElementById('lineupBox');
+  const teams = currentTeams();
+  if(!teams){ box.innerHTML=''; return; }
+  const courts = Math.max(1, S.courtCount||1);
+  const ordered = orderedTeams(teams);
+  const onCourt = ordered.slice(0, courts*2);
+  const queue = ordered.slice(courts*2);
+  let html = `<div class="section-label">ลงสนาม</div>
+  <div class="card">
+    <div class="prow" style="border-bottom:none;padding:2px 4px 10px">
+      <span class="pname" style="font-size:14px">จำนวนสนาม</span>
+      <div class="stepper">
+        <button id="courtMinus">−</button>
+        <span class="val" id="courtVal">${courts}</span>
+        <button id="courtPlus">+</button>
+      </div>
+    </div>`;
+  for(let i=0;i<courts;i++){
+    const t1 = onCourt[i*2], t2 = onCourt[i*2+1];
+    html += `<div class="court"><div class="ch">สนาม ${i+1}</div>`;
+    if(t1) html += teamHTML(t1); else html += `<div class="team" style="color:#7E97A0">— ว่าง —</div>`;
+    html += `<div class="vs">VS</div>`;
+    if(t2) html += teamHTML(t2); else html += `<div class="team" style="color:#7E97A0">— รอคู่แข่ง —</div>`;
+    html += `</div>`;
+  }
+  if(queue.length){
+    html += `<div class="tag" style="margin-top:10px">คิวรอลงถัดไป</div>`;
+    queue.forEach((t,i)=>{ html += `<div class="qrow"><span class="pairidx">${i+1}</span>${teamHTML(t)}</div>`; });
+  } else {
+    html += `<div class="tag" style="margin-top:10px;color:#7E97A0">ไม่มีทีมรอคิว</div>`;
+  }
+  html += `<div class="tag" style="margin-top:12px;line-height:1.6">ชนะอยู่ต่อ · กินได้สูงสุด 2 เกม · แพ้หรือครบ 2 เกมลงจากสนาม แล้วทีมหน้าคิวขึ้นแทน (ทีมที่ลงไปต่อท้ายคิว)</div>
+    <button class="btn btn-ghost mt12" id="reshuffleLineup">🔀 สุ่มลำดับใหม่</button>
+  </div>`;
+  box.innerHTML = html;
+  document.getElementById('courtMinus').onclick = ()=>{ S.courtCount = Math.max(1,(S.courtCount||2)-1); refresh(); };
+  document.getElementById('courtPlus').onclick = ()=>{ S.courtCount = (S.courtCount||2)+1; refresh(); };
+  document.getElementById('reshuffleLineup').onclick = ()=>{
+    const n = S.rounds[S.rounds.length-1].n;
+    S.lineup = { n, order: shuffle(teams.map(t=>t.key)) };
+    refresh();
+  };
+}
+
+function refresh(){ save(); renderRoster(); renderHints(); renderMode(); renderDraft(); renderHistory(); renderLineup(); }
+
+/* ---------------- actions ---------------- */
+function addPlayer(){
+  const inp = document.getElementById('nameInput'); const nm = inp.value.trim(); if(!nm) return;
+  const p = { id:uid(), name:nm, gender }; S.roster.push(p); S.present.push(p.id); inp.value=''; inp.focus(); refresh();
+}
+function roll(){ draft = generateRound(presentPlayers(), S.history, S.byeCounts, S.freeMode); renderDraft(); document.getElementById('draftBox').scrollIntoView({behavior:'smooth',block:'start'}); }
+function commit(){
+  if(!draft) return;
+  draft.pairs.forEach(p=>S.history.push(pairKey(p.a.id,p.b.id)));
+  S.rounds.push({ n:S.rounds.length+1, pairs:draft.pairs, byes:draft.byes, free:S.freeMode });
+  draft.byes.forEach(p=>{ S.byeCounts[p.id]=(S.byeCounts[p.id]||0)+1; });
+  draft = null; refresh();
+}
+function undo(){
+  if(!S.rounds.length) return; const last = S.rounds.pop();
+  last.pairs.forEach(p=>{ const k=pairKey(p.a.id,p.b.id); const i=S.history.lastIndexOf(k); if(i>=0)S.history.splice(i,1); });
+  if(last.byes) last.byes.forEach(p=>{ S.byeCounts[p.id]=Math.max(0,(S.byeCounts[p.id]||0)-1); });
+  refresh();
+}
+function newSession(){ S.history=[]; S.rounds=[]; S.byeCounts={}; S.lineup=null; draft=null; refresh(); }
+function copyDraft(){
+  if(!draft) return; const g=x=>x.gender==='M'?'ช':'ญ';
+  const lines=[`🏸 รอบ ${S.rounds.length+1}${S.freeMode?' (ตามยถากรรม)':''}`];
+  draft.pairs.forEach((p,i)=>lines.push(`${i+1}. ${p.a.name}(${g(p.a)}) + ${p.b.name}(${g(p.b)})`));
+  if(draft.byes.length) lines.push(`พัก: ${draft.byes.map(p=>`${p.name}(${g(p)})`).join(', ')}`);
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>{ const b=document.getElementById('copyBtn'); if(b){b.textContent='✓ คัดลอกแล้ว'; setTimeout(()=>b.textContent='📋 คัดลอกลง LINE',1800);} }).catch(()=>{});
+}
+let backupOpen=false;
+function showBackupMsg(t){ const e=document.getElementById('backupMsg'); e.textContent=t; e.style.display='block'; setTimeout(()=>e.style.display='none',3000); }
+function exportRoster(){ if(!S.roster.length) return; navigator.clipboard.writeText(encRoster(S.roster)).then(()=>showBackupMsg('คัดลอกโค้ดแล้ว — เก็บไว้ในแชท LINE ตัวเอง')).catch(()=>showBackupMsg('คัดลอกไม่ได้ในเครื่องนี้')); }
+function importRoster(){
+  const inp=document.getElementById('importInput'); const code=inp.value;
+  try { const r=decRoster(code); if(!Array.isArray(r)||!r.length) throw 0; S.roster=r; S.present=r.map(p=>p.id); inp.value=''; refresh(); showBackupMsg(`กู้คืนแล้ว ${r.length} คน`); }
+  catch { showBackupMsg('โค้ดไม่ถูกต้อง ลองวางใหม่อีกครั้ง'); }
+}
+
+/* ---------------- คิดเงิน (split bill view) ---------------- */
+let billView = false;
+function setView(toBill){
+  billView = toBill;
+  document.getElementById('mainView').style.display = toBill ? 'none' : 'block';
+  document.getElementById('billView').style.display = toBill ? 'block' : 'none';
+  document.getElementById('menuBtnIcon').textContent = toBill ? '←' : '☰';
+  document.getElementById('menuBtnLabel').textContent = toBill ? 'กลับ' : 'คิดเงิน';
+  if(toBill) renderBilling();
+  window.scrollTo(0,0);
+}
+function toggleView(){ setView(!billView); }
+function addBillRound(){
+  S.billing.rounds.push({ courts:'', hours:'', courtPrice:'', shuttles:'', shuttlePrice:'', people:[...S.present] });
+  save(); renderBilling();
+}
+function billNumInput(label, field, i, ph){
+  const v = S.billing.rounds[i][field];
+  return `<div class="grow"><div class="ilabel">${label}</div>
+    <input class="input" type="number" inputmode="decimal" min="0" data-bill="${field}" data-i="${i}" value="${v===''||v==null?'':v}" placeholder="${ph}" /></div>`;
+}
+function renderBilling(){
+  const box = document.getElementById('billRounds');
+  if(!S.billing.rounds.length){
+    box.innerHTML = `<div class="empty" style="padding:10px 8px">ยังไม่มีรอบ — กด “+ เพิ่มรอบ” เพื่อเริ่มคิดเงินค่าก๊วน</div>`;
+    document.getElementById('billResult').innerHTML='';
+    return;
+  }
+  box.innerHTML = S.billing.rounds.map((r,i)=>{
+    const peoplePicks = S.roster.map(p=>{
+      const on = (r.people||[]).includes(p.id);
+      return `<button class="toggle ${on?'on':''}" data-billtoggle="${p.id}" data-i="${i}">${esc(p.name)}</button>`;
+    }).join('') || `<span class="tag" style="margin-top:0">ยังไม่มีรายชื่อใน roster</span>`;
+    const cnt = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id)).length;
+    return `<div class="card" style="background:#0E222B;margin-bottom:10px">
+      <div class="prow" style="border-bottom:1px solid rgba(233,241,236,.16);padding:0 2px 9px;margin-bottom:9px">
+        <span class="pname disp" style="color:#C6FF4A;font-size:15px">รอบที่ ${i+1}</span>
+        <button class="del" data-billdel="${i}">×</button>
+      </div>
+      <div class="row2">${billNumInput('คอร์ท','courts',i,'จำนวน')}${billNumInput('ชั่วโมง','hours',i,'ชม.')}</div>
+      <div class="row2 mt9">${billNumInput('ราคาคอร์ท/ชม','courtPrice',i,'บาท')}${billNumInput('จำนวนลูก','shuttles',i,'ลูก')}</div>
+      <div class="row2 mt9">${billNumInput('ราคา/ลูก','shuttlePrice',i,'บาท')}<div class="grow"></div></div>
+      <div class="ilabel" style="margin-top:11px">คนในรอบนี้ (${cnt} คน) — แตะเพื่อเอาออก/ใส่กลับ</div>
+      <div class="ppick">${peoplePicks}</div>
+    </div>`;
+  }).join('');
+}
+function calcBilling(){
+  const perPerson = {}; const roundResults = []; let grand = 0;
+  S.billing.rounds.forEach(r=>{
+    const courts=+r.courts||0, hours=+r.hours||0, cp=+r.courtPrice||0, sh=+r.shuttles||0, sp=+r.shuttlePrice||0;
+    const cost = courts*hours*cp + sh*sp;
+    const people = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id));
+    const perHead = people.length ? cost/people.length : 0;
+    people.forEach(id=>{ perPerson[id]=(perPerson[id]||0)+perHead; });
+    grand += cost;
+    roundResults.push({ cost, perHead, count:people.length });
+  });
+  return { perPerson, roundResults, grand };
+}
+function nameOf(id){ const p=S.roster.find(x=>x.id===id); return p?p.name:'(ลบแล้ว)'; }
+function renderBillResult(){
+  const { perPerson, roundResults, grand } = calcBilling();
+  const ids = Object.keys(perPerson);
+  let html = `<div class="section-label" style="margin-top:18px">สรุปแต่ละรอบ</div><div class="card" style="background:#0E222B">`;
+  roundResults.forEach((rr,i)=>{
+    html += `<div class="res-row"><span>รอบที่ ${i+1} · ${rr.count} คน</span><span class="amt">${rr.cost.toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· หัวละ ${rr.perHead.toFixed(2)}</span></span></div>`;
+  });
+  html += `</div>`;
+  if(ids.length){
+    let roundUpSum = 0;
+    html += `<div class="section-label">ใครจ่ายเท่าไหร่</div><div class="card" style="background:#0E222B">`;
+    ids.forEach(id=>{
+      const real = perPerson[id]; const up = Math.ceil(real - 1e-9); roundUpSum += up;
+      html += `<div class="res-row"><span>${esc(nameOf(id))}</span><span class="amt" style="color:#C6FF4A">${up} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· จริง ${real.toFixed(2)}</span></span></div>`;
+    });
+    html += `<div class="res-row" style="margin-top:4px"><span class="disp">ยอดรวมทั้งหมด</span><span class="amt disp" style="font-size:18px">${grand.toLocaleString()} ฿</span></div>`;
+    html += `<div class="res-row"><span class="tag" style="margin-top:0">เก็บจริง (ปัดขึ้น)</span><span class="amt" style="color:#C6FF4A">${roundUpSum.toLocaleString()} ฿</span></div>`;
+    html += `</div>`;
+  }
+  html += `<div class="row2 mt12">
+      <button class="btn btn-ghost grow" id="copyBillBtn">📋 คัดลอกสรุปลง LINE</button>
+      <button class="btn btn-ghost grow" id="clearBillBtn">🗑 ล้างเริ่มใหม่</button>
+    </div>`;
+  document.getElementById('billResult').innerHTML = html;
+  document.getElementById('copyBillBtn').onclick = copyBill;
+  document.getElementById('clearBillBtn').onclick = ()=>{ S.billing={rounds:[]}; save(); renderBilling(); document.getElementById('billResult').innerHTML=''; };
+}
+function copyBill(){
+  const { perPerson, roundResults, grand } = calcBilling();
+  const lines = ['💵 สรุปค่าก๊วน'];
+  roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1}: ${rr.cost.toLocaleString()}฿ (${rr.count}คน · หัวละ ${rr.perHead.toFixed(2)})`));
+  lines.push('— ใครจ่ายเท่าไหร่ —');
+  let roundUpSum=0;
+  Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; lines.push(`${nameOf(id)}: ${up}฿`); });
+  lines.push(`รวมทั้งหมด ${grand.toLocaleString()}฿ · เก็บจริง ${roundUpSum.toLocaleString()}฿`);
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>{ const b=document.getElementById('copyBillBtn'); if(b){ b.textContent='✓ คัดลอกแล้ว'; setTimeout(()=>b.textContent='📋 คัดลอกสรุปลง LINE',1800); } }).catch(()=>{});
+}
+
+/* ---------------- wire up ---------------- */
+document.getElementById('genderBtn').onclick = function(){ gender = gender==='M'?'F':'M'; this.textContent = gender==='M'?'ช':'ญ'; };
+document.getElementById('addBtn').onclick = addPlayer;
+document.getElementById('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') addPlayer(); });
+document.getElementById('rosterList').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  const row = e.target.closest('.prow'); const id = row && row.dataset.id; if(!id) return;
+  if(btn.dataset.act==='toggle'){ S.present = S.present.includes(id) ? S.present.filter(x=>x!==id) : [...S.present, id]; refresh(); }
+  else if(btn.dataset.act==='del'){ S.roster = S.roster.filter(p=>p.id!==id); S.present = S.present.filter(x=>x!==id); refresh(); }
+});
+document.getElementById('modeRule').onclick = ()=>{ S.freeMode=false; draft=null; refresh(); };
+document.getElementById('modeFree').onclick = ()=>{ S.freeMode=true; draft=null; refresh(); };
+document.getElementById('rollBtn').onclick = ()=>{ if(presentPlayers().length<2){ return; } roll(); };
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('newSessionBtn').onclick = newSession;
+document.getElementById('backupToggle').onclick = ()=>{ backupOpen=!backupOpen; document.getElementById('backupBox').style.display = backupOpen?'block':'none'; };
+document.getElementById('exportBtn').onclick = exportRoster;
+document.getElementById('importBtn').onclick = importRoster;
+
+// collapsible "วิธีทำงาน"
+document.getElementById('howToggle').onclick = function(){
+  const open = document.getElementById('howBox').style.display==='none';
+  document.getElementById('howBox').style.display = open?'block':'none';
+  this.classList.toggle('open', open);
+};
+
+// view toggle "คิดเงิน"
+document.getElementById('menuBtn').onclick = toggleView;
+document.getElementById('addBillRound').onclick = addBillRound;
+document.getElementById('calcBillBtn').onclick = renderBillResult;
+document.getElementById('billRounds').addEventListener('input', e=>{
+  const inp = e.target.closest('[data-bill]'); if(!inp) return;
+  const i = +inp.dataset.i; S.billing.rounds[i][inp.dataset.bill] = inp.value; save();
+});
+document.getElementById('billRounds').addEventListener('click', e=>{
+  const del = e.target.closest('[data-billdel]');
+  if(del){ S.billing.rounds.splice(+del.dataset.billdel,1); save(); renderBilling(); document.getElementById('billResult').innerHTML=''; return; }
+  const tg = e.target.closest('[data-billtoggle]');
+  if(tg){ const i=+tg.dataset.i, id=tg.dataset.billtoggle; const r=S.billing.rounds[i];
+    r.people = (r.people||[]).includes(id) ? r.people.filter(x=>x!==id) : [...(r.people||[]), id];
+    save(); renderBilling(); return; }
+});
+
+refresh();
+</script>
+</body>
+</html>
