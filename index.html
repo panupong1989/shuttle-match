@@ -492,7 +492,7 @@ function renderBilling(){
   }).join('');
 }
 function calcBilling(){
-  const perPerson = {}; const roundResults = []; let grand = 0;
+  const perPerson = {}; const shuttlePaid = {}; const roundResults = []; let grand = 0;
   S.billing.rounds.forEach(r=>{
     const courts=+r.courts||0, hours=+r.hours||0, cp=+r.courtPrice||0;
     const sb = r.shuttlesBy||{}; const pb = r.shuttlePriceBy||{};
@@ -509,11 +509,12 @@ function calcBilling(){
       const shuttleCredit = (+sb[id]||0)*(+pb[id]||0);    // เงินค่าลูกที่คนนี้ออกไปแล้ว
       const courtCredit = (id===payer) ? courtCost : 0;   // เงินค่าคอร์ทที่คนนี้จ่ายไปก่อน
       perPerson[id]=(perPerson[id]||0) + courtPerHead + shuttlePerHead - shuttleCredit - courtCredit;
+      if(shuttleCredit) shuttlePaid[id]=(shuttlePaid[id]||0) + shuttleCredit;
     });
     grand += courtCost + shuttleCost;
-    roundResults.push({ courtCost, courtPerHead, totalShuttles, shuttleCost, shuttlePerHead, count:people.length, payer });
+    roundResults.push({ courtCost, courtPerHead, totalShuttles, shuttleCost, shuttlePerHead, perHead:courtPerHead+shuttlePerHead, count:people.length, payer });
   });
-  return { perPerson, roundResults, grand };
+  return { perPerson, shuttlePaid, roundResults, grand };
 }
 function nameOf(id){ const p=S.roster.find(x=>x.id===id); return p?p.name:'(ลบแล้ว)'; }
 function settleTransfers(perPerson){
@@ -536,7 +537,7 @@ function settleTransfers(perPerson){
   return tx;
 }
 function renderBillResult(){
-  const { perPerson, roundResults, grand } = calcBilling();
+  const { perPerson, shuttlePaid, roundResults, grand } = calcBilling();
   const ids = Object.keys(perPerson);
   let html = `<div class="section-label" style="margin-top:18px">สรุปแต่ละรอบ</div>`;
   roundResults.forEach((rr,i)=>{
@@ -545,6 +546,7 @@ function renderBillResult(){
       <div class="res-row"><span>ค่าคอร์ทรวม</span><span class="amt">${rr.courtCost.toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· หัวละ ${rr.courtPerHead.toFixed(2)}</span></span></div>
       ${rr.payer?`<div class="res-row"><span class="tag" style="margin-top:0">คนจ่ายค่าคอร์ทไปก่อน</span><span style="font-size:13px;color:#C6FF4A">${esc(nameOf(rr.payer))}</span></div>`:''}
       <div class="res-row"><span>ค่าลูก (${rr.totalShuttles} ลูก)</span><span class="amt">${rr.shuttleCost.toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· หัวละ ${rr.shuttlePerHead.toFixed(2)}</span></span></div>
+      <div class="res-row" style="border-bottom:none"><span class="disp">รวมต่อคน</span><span class="amt disp" style="color:#C6FF4A">คนละ ${rr.perHead.toFixed(2)} ฿</span></div>
     </div>`;
   });
   if(ids.length){
@@ -552,10 +554,12 @@ function renderBillResult(){
     html += `<div class="section-label">ใครจ่ายเท่าไหร่ (ทั้งวัน)</div><div class="card" style="background:#0E222B">`;
     ids.forEach(id=>{
       const real = perPerson[id]; const up = Math.ceil(real - 1e-9); roundUpSum += up;
+      const paid = shuttlePaid[id]||0;
+      const nameLbl = `${esc(nameOf(id))}${paid?` <span style="color:#7E97A0;font-weight:400;font-size:12px">(ออกค่าลูก ${paid.toLocaleString()}฿)</span>`:''}`;
       if(up < 0){
-        html += `<div class="res-row"><span>${esc(nameOf(id))}</span><span class="amt" style="color:#C6FF4A">ได้คืน ${(-up).toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· จริง ${real.toFixed(2)}</span></span></div>`;
+        html += `<div class="res-row"><span>${nameLbl}</span><span class="amt" style="color:#C6FF4A">ได้คืน ${(-up).toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· จริง ${real.toFixed(2)}</span></span></div>`;
       } else {
-        html += `<div class="res-row"><span>${esc(nameOf(id))}</span><span class="amt">${up} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· จริง ${real.toFixed(2)}</span></span></div>`;
+        html += `<div class="res-row"><span>${nameLbl}</span><span class="amt">${up} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· จริง ${real.toFixed(2)}</span></span></div>`;
       }
     });
     html += `<div class="res-row" style="margin-top:4px"><span class="disp">ค่าใช้จ่ายจริง (คอร์ท+ลูก)</span><span class="amt disp" style="font-size:18px">${grand.toLocaleString()} ฿</span></div>`;
@@ -580,12 +584,12 @@ function renderBillResult(){
   document.getElementById('clearBillBtn').onclick = ()=>{ S.billing={rounds:[]}; save(); renderBilling(); document.getElementById('billResult').innerHTML=''; };
 }
 function copyBill(){
-  const { perPerson, roundResults, grand } = calcBilling();
+  const { perPerson, shuttlePaid, roundResults, grand } = calcBilling();
   const lines = ['💵 สรุปค่าก๊วน'];
-  roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1} (${rr.count}คน): คอร์ท ${rr.courtCost.toLocaleString()}฿ (หัวละ ${rr.courtPerHead.toFixed(2)})${rr.payer?` [${nameOf(rr.payer)}ออกก่อน]`:''} · ลูก ${rr.totalShuttles}ลูก ${rr.shuttleCost.toLocaleString()}฿ (หัวละ ${rr.shuttlePerHead.toFixed(2)})`));
+  roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1} (${rr.count}คน): คอร์ท ${rr.courtCost.toLocaleString()}฿ (หัวละ ${rr.courtPerHead.toFixed(2)})${rr.payer?` [${nameOf(rr.payer)}ออกก่อน]`:''} · ลูก ${rr.totalShuttles}ลูก ${rr.shuttleCost.toLocaleString()}฿ (หัวละ ${rr.shuttlePerHead.toFixed(2)}) · รวมคนละ ${rr.perHead.toFixed(2)}฿`));
   lines.push('— ใครจ่ายเท่าไหร่ —');
   let roundUpSum=0;
-  Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; lines.push(up<0 ? `${nameOf(id)}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}: ${up}฿`); });
+  Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; const paid=shuttlePaid[id]||0; const tail=paid?` (ออกค่าลูก ${paid.toLocaleString()}฿)`:''; lines.push(up<0 ? `${nameOf(id)}${tail}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}${tail}: ${up}฿`); });
   lines.push(`ค่าใช้จ่ายจริง ${grand.toLocaleString()}฿ · รวมเก็บสุทธิ ${roundUpSum.toLocaleString()}฿`);
   const tx = settleTransfers(perPerson);
   if(tx.length){
