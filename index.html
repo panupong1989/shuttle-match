@@ -526,17 +526,13 @@ function settleTransfers(perPerson){
   });
   if(!deb.length || !cred.length) return [];
   cred.sort((a,b)=>b.amt-a.amt); deb.sort((a,b)=>b.amt-a.amt);
-  // เศษจากการปัดขึ้น ยกให้คนที่ออกเงินไปก่อนมากสุด (creditor ตัวแรก)
-  const surplus = deb.reduce((s,d)=>s+d.amt,0) - cred.reduce((s,c)=>s+c.amt,0);
-  if(surplus>0) cred[0].amt += surplus;
-  const tx=[]; let ci=0, di=0;
-  while(ci<cred.length && di<deb.length){
-    const x = Math.min(cred[ci].amt, deb[di].amt);
-    if(x>0) tx.push({from:deb[di].id, to:cred[ci].id, amt:x});
-    cred[ci].amt-=x; deb[di].amt-=x;
-    if(cred[ci].amt<=0) ci++;
-    if(deb[di].amt<=0) di++;
-  }
+  // คนกลาง = คนที่ออกเงินไปก่อนมากสุด -> รับโอนจากทุกคน แล้วทบไปคืนคนอื่นที่ออกเงินมา
+  const hub = cred[0].id;
+  const tx=[];
+  // 1) ทุกคนที่ติดเงิน โอนให้คนกลางคนเดียว ครั้งเดียวจบ
+  deb.forEach(d=> tx.push({from:d.id, to:hub, amt:d.amt}));
+  // 2) คนกลางคืนเงินให้คนอื่นที่ออกเงินไปก่อน (เศษปัดขึ้นคนกลางเก็บไว้)
+  cred.slice(1).forEach(c=> tx.push({from:hub, to:c.id, amt:c.amt}));
   return tx;
 }
 function renderBillResult(){
