@@ -521,7 +521,7 @@ function settleTransfers(perPerson){
   // ใช้ยอดปัดเท่ากับการ์ด "ใครจ่ายเท่าไหร่" -> ลูกหนี้จ่ายตรงตามยอดที่โชว์
   const cred=[], deb=[];
   Object.keys(perPerson).forEach(id=>{
-    const up = Math.ceil(perPerson[id]-1e-9);
+    const up = Math.round(perPerson[id]);
     if(up>0) deb.push({id, amt:up});            // ต้องจ่าย
     else if(up<0) cred.push({id, amt:-up});     // ต้องได้คืน
   });
@@ -553,7 +553,7 @@ function renderBillResult(){
     let roundUpSum = 0;
     html += `<div class="section-label">ใครจ่ายเท่าไหร่ (ทั้งวัน)</div><div class="card" style="background:#0E222B">`;
     ids.forEach(id=>{
-      const real = perPerson[id]; const up = Math.ceil(real - 1e-9); roundUpSum += up;
+      const real = perPerson[id]; const up = Math.round(real); roundUpSum += up;
       const paid = shuttlePaid[id]||0;
       const nameLbl = `${esc(nameOf(id))}${paid?` <span style="color:#7E97A0;font-weight:400;font-size:12px">(ออกค่าลูก ${paid.toLocaleString()}฿)</span>`:''}`;
       if(up < 0){
@@ -563,7 +563,7 @@ function renderBillResult(){
       }
     });
     html += `<div class="res-row" style="margin-top:4px"><span class="disp">ค่าใช้จ่ายจริง (คอร์ท+ลูก)</span><span class="amt disp" style="font-size:18px">${grand.toLocaleString()} ฿</span></div>`;
-    html += `<div class="res-row"><span class="tag" style="margin-top:0">รวมเก็บสุทธิ (ปัด)</span><span class="amt" style="color:#C6FF4A">${roundUpSum.toLocaleString()} ฿</span></div>`;
+    html += `<div class="res-row"><span class="tag" style="margin-top:0">รวมที่เก็บได้ (หลังปัดเศษ)</span><span class="amt" style="color:#C6FF4A">${roundUpSum.toLocaleString()} ฿</span></div>`;
     html += `</div>`;
     // ใครโอนให้ใคร
     const tx = settleTransfers(perPerson);
@@ -589,8 +589,8 @@ function copyBill(){
   roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1} (${rr.count}คน): คอร์ท ${rr.courtCost.toLocaleString()}฿ (หัวละ ${rr.courtPerHead.toFixed(2)})${rr.payer?` [${nameOf(rr.payer)}ออกก่อน]`:''} · ลูก ${rr.totalShuttles}ลูก ${rr.shuttleCost.toLocaleString()}฿ (หัวละ ${rr.shuttlePerHead.toFixed(2)}) · รวมคนละ ${rr.perHead.toFixed(2)}฿`));
   lines.push('— ใครจ่ายเท่าไหร่ —');
   let roundUpSum=0;
-  Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; const paid=shuttlePaid[id]||0; const tail=paid?` (ออกค่าลูก ${paid.toLocaleString()}฿)`:''; lines.push(up<0 ? `${nameOf(id)}${tail}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}${tail}: ${up}฿`); });
-  lines.push(`ค่าใช้จ่ายจริง ${grand.toLocaleString()}฿ · รวมเก็บสุทธิ ${roundUpSum.toLocaleString()}฿`);
+  Object.keys(perPerson).forEach(id=>{ const up=Math.round(perPerson[id]); roundUpSum+=up; const paid=shuttlePaid[id]||0; const tail=paid?` (ออกค่าลูก ${paid.toLocaleString()}฿)`:''; lines.push(up<0 ? `${nameOf(id)}${tail}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}${tail}: ${up}฿`); });
+  lines.push(`ค่าใช้จ่ายจริง ${grand.toLocaleString()}฿ · รวมที่เก็บได้ ${roundUpSum.toLocaleString()}฿`);
   const tx = settleTransfers(perPerson);
   if(tx.length){
     lines.push('— ใครโอนให้ใคร —');
