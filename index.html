@@ -89,8 +89,8 @@
   .ppick .toggle { width:auto; }
   .bprow { display:flex; align-items:center; gap:8px; padding:6px 2px; border-bottom:1px solid rgba(233,241,236,.16); }
   .bprow:last-child { border-bottom:none; }
-  .bprow .toggle { width:auto; flex:1; text-align:left; }
-  .bprow .shin { width:60px; padding:8px; text-align:center; flex:0 0 auto; }
+  .bprow .toggle { width:auto; flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bprow .shin { width:54px; padding:8px 6px; text-align:center; flex:0 0 auto; }
   .bprow .shlbl { font-family:'Oswald',sans-serif; font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; color:#7E97A0; flex:0 0 auto; }
   .res-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid rgba(233,241,236,.16); font-size:14px; }
   .res-row:last-child { border-bottom:none; }
@@ -173,6 +173,15 @@ let S = load() || { roster:[], present:[], history:[], rounds:[], byeCounts:{}, 
 if(typeof S.courtCount !== 'number') S.courtCount = 2;
 if(!('lineup' in S)) S.lineup = null;
 if(!S.billing) S.billing = { rounds:[] };
+// migrate billing rounds: per-person shuttle price + court payer (new features)
+S.billing.rounds.forEach(r=>{
+  if(!r.shuttlePriceBy){
+    r.shuttlePriceBy = {};
+    // ของเก่า: ราคา/ลูกราคาเดียวทั้งรอบ -> โยกมาเป็นราคารายคนที่เอาลูกมา
+    if(r.shuttlePrice!=null && r.shuttlePrice!=='') Object.keys(r.shuttlesBy||{}).forEach(id=>{ r.shuttlePriceBy[id]=r.shuttlePrice; });
+  }
+  if(!('courtPaidBy' in r)) r.courtPaidBy = '';
+});
 let draft = null;
 let gender = 'M';
 
@@ -432,7 +441,7 @@ function setView(toBill){
 }
 function toggleView(){ setView(!billView); }
 function addBillRound(){
-  S.billing.rounds.push({ courts:'', hours:'', courtPrice:'', shuttlePrice:'', people:[...S.present], shuttlesBy:{} });
+  S.billing.rounds.push({ courts:'', hours:'', courtPrice:'', people:[...S.present], shuttlesBy:{}, shuttlePriceBy:{}, courtPaidBy:'' });
   save(); renderBilling();
 }
 function billNumInput(label, field, i, ph){
@@ -448,26 +457,36 @@ function renderBilling(){
     return;
   }
   box.innerHTML = S.billing.rounds.map((r,i)=>{
-    const sb = r.shuttlesBy||{};
+    const sb = r.shuttlesBy||{}; const pb = r.shuttlePriceBy||{};
     const peopleRows = S.roster.map(p=>{
       const on = (r.people||[]).includes(p.id);
       const sh = sb[p.id]; const shv = (sh===''||sh==null)?'':sh;
+      const pr = pb[p.id]; const prv = (pr===''||pr==null)?'':pr;
       return `<div class="bprow" style="opacity:${on?1:.45}">
         <button class="toggle ${on?'on':''}" data-billtoggle="${p.id}" data-i="${i}">${esc(p.name)}</button>
-        <span class="shlbl">ลูก</span>
-        <input class="input shin" type="number" inputmode="numeric" min="0" data-shuttle="${p.id}" data-i="${i}" value="${shv}" placeholder="0" ${on?'':'disabled'} />
+        <input class="input shin" type="number" inputmode="numeric" min="0" data-shuttle="${p.id}" data-i="${i}" value="${shv}" placeholder="ลูก" ${on?'':'disabled'} title="จำนวนลูกที่เอามา" />
+        <span class="shlbl">×</span>
+        <input class="input shin" type="number" inputmode="decimal" min="0" data-shprice="${p.id}" data-i="${i}" value="${prv}" placeholder="฿/ลูก" ${on?'':'disabled'} title="ราคาต่อลูกของคนนี้" />
       </div>`;
     }).join('') || `<span class="tag" style="margin-top:0">ยังไม่มีรายชื่อใน roster</span>`;
-    const cnt = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id)).length;
-    const totShuttles = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id)).reduce((s,id)=>s+(+sb[id]||0),0);
+    const inRound = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id));
+    const cnt = inRound.length;
+    const totShuttles = inRound.reduce((s,id)=>s+(+sb[id]||0),0);
+    const totShuttleCost = inRound.reduce((s,id)=>s+(+sb[id]||0)*(+pb[id]||0),0);
+    const payerOpts = `<option value="">— ยังไม่ระบุ (หารเท่ากัน) —</option>` + inRound.map(id=>{
+      const nm = (S.roster.find(p=>p.id===id)||{}).name||''; const sel = r.courtPaidBy===id?' selected':'';
+      return `<option value="${id}"${sel}>${esc(nm)}</option>`;
+    }).join('');
     return `<div class="card" style="background:#0E222B;margin-bottom:10px">
       <div class="prow" style="border-bottom:1px solid rgba(233,241,236,.16);padding:0 2px 9px;margin-bottom:9px">
         <span class="pname disp" style="color:#C6FF4A;font-size:15px">รอบที่ ${i+1}</span>
         <button class="del" data-billdel="${i}">×</button>
       </div>
       <div class="row2">${billNumInput('คอร์ท','courts',i,'จำนวน')}${billNumInput('ชั่วโมง','hours',i,'ชม.')}</div>
-      <div class="row2 mt9">${billNumInput('ราคาคอร์ท/ชม','courtPrice',i,'บาท')}${billNumInput('ราคา/ลูก','shuttlePrice',i,'บาท')}</div>
-      <div class="ilabel" style="margin-top:11px">คนในรอบนี้ (${cnt} คน · ลูกรวม ${totShuttles}) — แตะชื่อเอาออก/ใส่กลับ · กรอกลูกที่เอามา</div>
+      <div class="row2 mt9">${billNumInput('ราคาคอร์ท/ชม','courtPrice',i,'บาท')}<div class="grow">
+        <div class="ilabel">คนจ่ายค่าคอร์ทไปก่อน (ได้คืน)</div>
+        <select class="input" data-courtpaid="${i}">${payerOpts}</select></div></div>
+      <div class="ilabel" style="margin-top:11px">คนในรอบนี้ (${cnt} คน · ลูกรวม ${totShuttles} = ${totShuttleCost.toLocaleString()}฿) — แตะชื่อเอาออก/ใส่กลับ · กรอก จำนวนลูก × ราคา/ลูก ของแต่ละคน</div>
       <div>${peopleRows}</div>
     </div>`;
   }).join('');
@@ -475,23 +494,24 @@ function renderBilling(){
 function calcBilling(){
   const perPerson = {}; const roundResults = []; let grand = 0;
   S.billing.rounds.forEach(r=>{
-    const courts=+r.courts||0, hours=+r.hours||0, cp=+r.courtPrice||0, sp=+r.shuttlePrice||0;
-    const sb = r.shuttlesBy||{};
+    const courts=+r.courts||0, hours=+r.hours||0, cp=+r.courtPrice||0;
+    const sb = r.shuttlesBy||{}; const pb = r.shuttlePriceBy||{};
     const people = (r.people||[]).filter(id=>S.roster.some(p=>p.id===id));
-    // 1) ค่าคอร์ท — หารเท่ากัน
+    const payer = (r.courtPaidBy && people.includes(r.courtPaidBy)) ? r.courtPaidBy : '';
+    // 1) ค่าคอร์ท — หารเท่ากัน แล้วคืนเงินคนที่จ่ายไปก่อน (ถ้าระบุ)
     const courtCost = courts*hours*cp;
     const courtPerHead = people.length ? courtCost/people.length : 0;
-    // 2) ค่าลูก — รวมหารเฉลี่ย แล้วคืนเงินคนที่เอาลูกมา
+    // 2) ค่าลูก — ราคาต่อลูกแยกรายคน, รวมแล้วหารเฉลี่ย แล้วคืนเงินคนที่เอาลูกมา
     const totalShuttles = people.reduce((s,id)=>s+(+sb[id]||0),0);
-    const shuttleCost = totalShuttles*sp;
+    const shuttleCost = people.reduce((s,id)=>s+(+sb[id]||0)*(+pb[id]||0),0);
     const shuttlePerHead = people.length ? shuttleCost/people.length : 0;
     people.forEach(id=>{
-      const credit = (+sb[id]||0)*sp;          // เงินที่คนนี้ออกค่าลูกไปแล้ว
-      const netShuttle = shuttlePerHead - credit; // ติดลบ = ได้คืน
-      perPerson[id]=(perPerson[id]||0) + courtPerHead + netShuttle;
+      const shuttleCredit = (+sb[id]||0)*(+pb[id]||0);    // เงินค่าลูกที่คนนี้ออกไปแล้ว
+      const courtCredit = (id===payer) ? courtCost : 0;   // เงินค่าคอร์ทที่คนนี้จ่ายไปก่อน
+      perPerson[id]=(perPerson[id]||0) + courtPerHead + shuttlePerHead - shuttleCredit - courtCredit;
     });
     grand += courtCost + shuttleCost;
-    roundResults.push({ courtCost, courtPerHead, totalShuttles, shuttleCost, shuttlePerHead, count:people.length });
+    roundResults.push({ courtCost, courtPerHead, totalShuttles, shuttleCost, shuttlePerHead, count:people.length, payer });
   });
   return { perPerson, roundResults, grand };
 }
@@ -504,6 +524,7 @@ function renderBillResult(){
     html += `<div class="card" style="background:#0E222B;margin-bottom:9px">
       <div class="disp" style="color:#C6FF4A;font-size:14px;margin-bottom:6px">รอบที่ ${i+1} · ${rr.count} คน</div>
       <div class="res-row"><span>ค่าคอร์ทรวม</span><span class="amt">${rr.courtCost.toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· หัวละ ${rr.courtPerHead.toFixed(2)}</span></span></div>
+      ${rr.payer?`<div class="res-row"><span class="tag" style="margin-top:0">คนจ่ายค่าคอร์ทไปก่อน</span><span style="font-size:13px;color:#C6FF4A">${esc(nameOf(rr.payer))}</span></div>`:''}
       <div class="res-row"><span>ค่าลูก (${rr.totalShuttles} ลูก)</span><span class="amt">${rr.shuttleCost.toLocaleString()} ฿ <span style="color:#7E97A0;font-weight:400;font-size:12px">· หัวละ ${rr.shuttlePerHead.toFixed(2)}</span></span></div>
     </div>`;
   });
@@ -533,7 +554,7 @@ function renderBillResult(){
 function copyBill(){
   const { perPerson, roundResults, grand } = calcBilling();
   const lines = ['💵 สรุปค่าก๊วน'];
-  roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1} (${rr.count}คน): คอร์ท ${rr.courtCost.toLocaleString()}฿ (หัวละ ${rr.courtPerHead.toFixed(2)}) · ลูก ${rr.totalShuttles}ลูก ${rr.shuttleCost.toLocaleString()}฿ (หัวละ ${rr.shuttlePerHead.toFixed(2)})`));
+  roundResults.forEach((rr,i)=>lines.push(`รอบ ${i+1} (${rr.count}คน): คอร์ท ${rr.courtCost.toLocaleString()}฿ (หัวละ ${rr.courtPerHead.toFixed(2)})${rr.payer?` [${nameOf(rr.payer)}ออกก่อน]`:''} · ลูก ${rr.totalShuttles}ลูก ${rr.shuttleCost.toLocaleString()}฿ (หัวละ ${rr.shuttlePerHead.toFixed(2)})`));
   lines.push('— ใครจ่ายเท่าไหร่ —');
   let roundUpSum=0;
   Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; lines.push(up<0 ? `${nameOf(id)}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}: ${up}฿`); });
@@ -577,6 +598,15 @@ document.getElementById('billRounds').addEventListener('input', e=>{
   const shin = e.target.closest('[data-shuttle]');
   if(shin){ const i = +shin.dataset.i; const r = S.billing.rounds[i];
     if(!r.shuttlesBy) r.shuttlesBy = {}; r.shuttlesBy[shin.dataset.shuttle] = shin.value; save(); return; }
+  const shp = e.target.closest('[data-shprice]');
+  if(shp){ const i = +shp.dataset.i; const r = S.billing.rounds[i];
+    if(!r.shuttlePriceBy) r.shuttlePriceBy = {}; r.shuttlePriceBy[shp.dataset.shprice] = shp.value; save(); return; }
+  const cpaid = e.target.closest('[data-courtpaid]');
+  if(cpaid){ const i = +cpaid.dataset.courtpaid; S.billing.rounds[i].courtPaidBy = cpaid.value; save(); return; }
+});
+document.getElementById('billRounds').addEventListener('change', e=>{
+  const cpaid = e.target.closest('[data-courtpaid]');
+  if(cpaid){ const i = +cpaid.dataset.courtpaid; S.billing.rounds[i].courtPaidBy = cpaid.value; save(); return; }
 });
 document.getElementById('billRounds').addEventListener('click', e=>{
   const del = e.target.closest('[data-billdel]');
