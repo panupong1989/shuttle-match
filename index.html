@@ -516,6 +516,29 @@ function calcBilling(){
   return { perPerson, roundResults, grand };
 }
 function nameOf(id){ const p=S.roster.find(x=>x.id===id); return p?p.name:'(ลบแล้ว)'; }
+function settleTransfers(perPerson){
+  // ใช้ยอดปัดเท่ากับการ์ด "ใครจ่ายเท่าไหร่" -> ลูกหนี้จ่ายตรงตามยอดที่โชว์
+  const cred=[], deb=[];
+  Object.keys(perPerson).forEach(id=>{
+    const up = Math.ceil(perPerson[id]-1e-9);
+    if(up>0) deb.push({id, amt:up});            // ต้องจ่าย
+    else if(up<0) cred.push({id, amt:-up});     // ต้องได้คืน
+  });
+  if(!deb.length || !cred.length) return [];
+  cred.sort((a,b)=>b.amt-a.amt); deb.sort((a,b)=>b.amt-a.amt);
+  // เศษจากการปัดขึ้น ยกให้คนที่ออกเงินไปก่อนมากสุด (creditor ตัวแรก)
+  const surplus = deb.reduce((s,d)=>s+d.amt,0) - cred.reduce((s,c)=>s+c.amt,0);
+  if(surplus>0) cred[0].amt += surplus;
+  const tx=[]; let ci=0, di=0;
+  while(ci<cred.length && di<deb.length){
+    const x = Math.min(cred[ci].amt, deb[di].amt);
+    if(x>0) tx.push({from:deb[di].id, to:cred[ci].id, amt:x});
+    cred[ci].amt-=x; deb[di].amt-=x;
+    if(cred[ci].amt<=0) ci++;
+    if(deb[di].amt<=0) di++;
+  }
+  return tx;
+}
 function renderBillResult(){
   const { perPerson, roundResults, grand } = calcBilling();
   const ids = Object.keys(perPerson);
@@ -542,6 +565,15 @@ function renderBillResult(){
     html += `<div class="res-row" style="margin-top:4px"><span class="disp">ค่าใช้จ่ายจริง (คอร์ท+ลูก)</span><span class="amt disp" style="font-size:18px">${grand.toLocaleString()} ฿</span></div>`;
     html += `<div class="res-row"><span class="tag" style="margin-top:0">รวมเก็บสุทธิ (ปัด)</span><span class="amt" style="color:#C6FF4A">${roundUpSum.toLocaleString()} ฿</span></div>`;
     html += `</div>`;
+    // ใครโอนให้ใคร
+    const tx = settleTransfers(perPerson);
+    if(tx.length){
+      html += `<div class="section-label">ใครโอนให้ใคร</div><div class="card" style="background:#0E222B">`;
+      tx.forEach(t=>{
+        html += `<div class="res-row"><span>${esc(nameOf(t.from))} <span style="color:#7E97A0">→</span> <b style="color:#C6FF4A">${esc(nameOf(t.to))}</b></span><span class="amt">${t.amt.toLocaleString()} ฿</span></div>`;
+      });
+      html += `<div class="res-row"><span class="tag" style="margin-top:0">โอนตามนี้แล้วจบเลย (ยอดตรงกับด้านบน)</span></div></div>`;
+    }
   }
   html += `<div class="row2 mt12">
       <button class="btn btn-ghost grow" id="copyBillBtn">📋 คัดลอกสรุปลง LINE</button>
@@ -559,6 +591,11 @@ function copyBill(){
   let roundUpSum=0;
   Object.keys(perPerson).forEach(id=>{ const up=Math.ceil(perPerson[id]-1e-9); roundUpSum+=up; lines.push(up<0 ? `${nameOf(id)}: ได้คืน ${(-up).toLocaleString()}฿` : `${nameOf(id)}: ${up}฿`); });
   lines.push(`ค่าใช้จ่ายจริง ${grand.toLocaleString()}฿ · รวมเก็บสุทธิ ${roundUpSum.toLocaleString()}฿`);
+  const tx = settleTransfers(perPerson);
+  if(tx.length){
+    lines.push('— ใครโอนให้ใคร —');
+    tx.forEach(t=>lines.push(`${nameOf(t.from)} → ${nameOf(t.to)}: ${t.amt.toLocaleString()}฿`));
+  }
   navigator.clipboard.writeText(lines.join('\n')).then(()=>{ const b=document.getElementById('copyBillBtn'); if(b){ b.textContent='✓ คัดลอกแล้ว'; setTimeout(()=>b.textContent='📋 คัดลอกสรุปลง LINE',1800); } }).catch(()=>{});
 }
 
