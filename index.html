@@ -563,9 +563,9 @@ function renderLineup(){
   const courts = Math.max(1, S.courtCount||1);
   const ordered = orderedTeams(teams);
   const roundRobin = !S.allowConsec;
-  const sched = roundRobin
-    ? (byes.length ? buildShiftRegister(ordered, courts, byes[0]) : buildRoundRobin(ordered, courts))
-    : buildWaves(ordered, courts);
+  const sched = byes.length
+    ? buildShiftRegister(ordered, courts, byes[0])
+    : (roundRobin ? buildRoundRobin(ordered, courts) : buildWaves(ordered, courts));
   const w1 = sched.waves[0];
 
   // 1) แถวตั้งค่าแบบกระชับ (ลดความเด่น)
