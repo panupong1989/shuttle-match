@@ -95,10 +95,14 @@
   .restchips { display:flex; flex-wrap:wrap; gap:6px; }
   .restchip { display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.03); border:1px solid rgba(233,241,236,.12); border-radius:8px; padding:5px 9px; font-size:13px; }
   .restchip .plus { color:#7E97A0; margin:0 1px; }
-  .nextline { display:flex; align-items:flex-start; gap:8px; margin-top:9px; font-size:13px; color:#B9CDD3; line-height:1.5; }
-  .nextline .nlk { color:#7E97A0; font-family:'Oswald',sans-serif; letter-spacing:.06em; font-weight:700; flex:0 0 auto; }
+  .nextline { display:flex; align-items:flex-start; gap:10px; margin-top:11px; font-size:15.5px; color:#C7DCE2; line-height:1.7; }
+  .nextline .nlk { color:#C6FF4A; font-family:'Oswald',sans-serif; letter-spacing:.06em; font-weight:700; flex:0 0 auto; font-size:15.5px; }
+  /* รายการ "ดูลำดับทั้งหมด" — แยกแต่ละรอบให้ชัด */
+  .nl-item { padding:9px 2px; border-bottom:1px solid rgba(233,241,236,.10); margin-top:0; }
+  .nl-item:last-child { border-bottom:none; }
+  .nl-item .nlk { display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; border-radius:7px; background:rgba(198,255,74,.12); border:1px solid rgba(198,255,74,.32); font-size:14px; }
   /* view toggle / คิดเงิน */
-  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:30; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:1000; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 14px rgba(0,0,0,.35); }
   .ilabel { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10px; color:#7E97A0; margin:0 2px 4px; }
   .ppick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .ppick .toggle { width:auto; }
@@ -186,7 +190,10 @@ function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} 
 let S = load() || { roster:[], present:[], history:[], rounds:[], byeCounts:{}, freeMode:false };
 // backward-compatible defaults for new features
 if(typeof S.courtCount !== 'number') S.courtCount = 2;
-if(typeof S.noConsecutive !== 'boolean') S.noConsecutive = false; // โหมด "ไม่ตีติด 2 รอบ"
+// โหมด "ตีติด 2 รอบ" — เปิด(default)=ยอมเล่นติด/หมุนพักยุติธรรม ไม่เตือน ; ปิด=เข้มงวด บังคับพัก เตือนเมื่อสำรองไม่พอ
+if(typeof S.allowConsec !== 'boolean'){
+  S.allowConsec = (typeof S.noConsecutive==='boolean') ? !S.noConsecutive : true;
+}
 if(!('lineup' in S)) S.lineup = null;
 if(!S.billing) S.billing = { rounds:[] };
 // migrate billing rounds: per-person shuttle price + court payer (new features)
@@ -362,35 +369,50 @@ function teamHTML(t){
   return `<div class="team">${chip(t.a.gender)}<span class="nm">${esc(t.a.name)}</span><span class="plus">+</span>${chip(t.b.gender)}<span class="nm">${esc(t.b.name)}</span></div>`;
 }
 const teamName = t => `${t.a.name}+${t.b.name}`;
-/* คำนวณลำดับลงสนามล่วงหน้าเป็นรอบ ๆ (wave) จากลำดับทีม + กฎ "ไม่ตีติด"
-   - slots = courts*2 ทีมต่อรอบ; ทีมที่เล่นครบ maxConsec รอบติด ต้องพักรอบถัดไป
-   - ดึงทีมที่พักนานสุด (rested มากสุด) มาลงก่อน → หมุนยุติธรรม
-   - auto-relax: ถ้าทีมพอจะเติมสนามไม่พอ ยอมให้เล่นติดเกินกติกา แล้วตั้ง flag relaxed */
-function buildWaves(teams, courts, maxConsec){
+/* คำนวณลำดับลงสนามล่วงหน้าเป็นรอบ ๆ (wave) จากลำดับทีม
+   - slots = courts*2 ทีมต่อรอบ; ที่เหลือ = พัก/รอคิว
+   - เลือกทีมพัก "น้อยครั้งสุด/นานสุด" มาพักก่อนเสมอ (หมุนยุติธรรม)
+   - ห้ามทีมที่เพิ่งพักรอบก่อนถูกเลือกพักซ้ำ ถ้ายังมีทีมอื่นพักได้ (ไม่พัก 2 รอบติด)
+   - strict (โหมดปิด/เข้มงวด): พยายามให้ทีมที่เพิ่งเล่นได้พัก (ไม่เล่นติด) ; ตั้ง relaxed=true
+     เมื่อทีมสำรองไม่พอจนต้องปล่อยให้เล่นติด */
+function buildWaves(teams, courts, strict){
   const slots = courts*2;
   if(teams.length <= slots){
+    // ทุกทีมลงครบทุกสนาม ไม่มีคิวพัก (โหมดเข้มงวดถือว่าบังคับพักไม่ได้ -> สำรองไม่พอ)
     return { waves:[{ play: teams.slice(), rest: [] }], relaxed:false, rotates:false };
   }
-  const consec = {}, rested = {}, idx = {};
-  teams.forEach((t,i)=>{ consec[t.key]=0; rested[t.key]=0; idx[t.key]=i; });
-  const orderFn = (a,b)=> (rested[b.key]-rested[a.key]) || (idx[a.key]-idx[b.key]);
-  let playedLast = new Set();
+  const restCount = teams.length - slots;
+  const rested = {}, idx = {};
+  teams.forEach((t,i)=>{ rested[t.key]=0; idx[t.key]=i; });
+  let lastRest = new Set();   // ทีมที่พักรอบก่อน
+  let lastPlay = new Set();   // ทีมที่เล่นรอบก่อน
   const waves = []; let relaxed = false;
-  const maxWaves = Math.min(4, teams.length); // โชว์ล่วงหน้าไม่กี่รอบพอเห็นการหมุน
+  const maxWaves = Math.min(teams.length + 1, 8); // โชว์ให้เห็นการหมุนครบรอบ (จำกัดไม่ให้ยาวเกิน)
   for(let w=0; w<maxWaves; w++){
-    const eligible = teams.filter(t=> consec[t.key] < maxConsec).sort(orderFn);
-    let play = eligible.slice(0, slots);
-    if(play.length < slots){              // คนพักไม่พอเติมสนาม -> ยอมเล่นติด
-      relaxed = true;
-      const forced = teams.filter(t=> consec[t.key] >= maxConsec).sort(orderFn);
-      play = play.concat(forced.slice(0, slots-play.length));
+    let resters;
+    if(strict){
+      // เข้มงวด: ให้ทีมที่เพิ่งเล่น (lastPlay) ได้พักก่อน แล้วค่อยทีมที่พักน้อยครั้งสุด
+      resters = teams.slice().sort((a,b)=>{
+        const pa = lastPlay.has(a.key)?0:1, pb = lastPlay.has(b.key)?0:1;
+        if(pa!==pb) return pa-pb;
+        return (rested[a.key]-rested[b.key]) || (idx[a.key]-idx[b.key]);
+      }).slice(0, restCount);
+    } else {
+      // ปกติ: หมุนพักยุติธรรม + ห้ามทีมที่เพิ่งพักถูกพักซ้ำถ้ามีทีมอื่น
+      resters = teams.slice().sort((a,b)=>{
+        const la = lastRest.has(a.key)?1:0, lb = lastRest.has(b.key)?1:0;
+        if(la!==lb) return la-lb;
+        return (rested[a.key]-rested[b.key]) || (idx[a.key]-idx[b.key]);
+      }).slice(0, restCount);
     }
-    const playSet = new Set(play.map(t=>t.key));
-    const rest = teams.filter(t=>!playSet.has(t.key));
+    const restSet = new Set(resters.map(t=>t.key));
+    const play = teams.filter(t=>!restSet.has(t.key));
+    const rest = resters.slice();
+    if(strict && w>0 && play.some(t=>lastPlay.has(t.key))) relaxed = true; // มีทีมเล่นติด -> สำรองไม่พอ
     waves.push({ play, rest });
-    play.forEach(t=>{ consec[t.key] = playedLast.has(t.key) ? consec[t.key]+1 : 1; });
-    rest.forEach(t=>{ consec[t.key]=0; rested[t.key]++; });
-    playedLast = playSet;
+    rest.forEach(t=>{ rested[t.key]++; });
+    lastRest = restSet;
+    lastPlay = new Set(play.map(t=>t.key));
   }
   return { waves, relaxed, rotates:true };
 }
@@ -403,8 +425,8 @@ function renderLineup(){
   const byes = (r && r.byes) ? r.byes : [];          // คนเศษ/คนพัก (ไม่มีคู่ทั้งรอบ)
   const courts = Math.max(1, S.courtCount||1);
   const ordered = orderedTeams(teams);
-  const maxConsec = S.noConsecutive ? 1 : 2;
-  const sched = buildWaves(ordered, courts, maxConsec);
+  const strict = !S.allowConsec;
+  const sched = buildWaves(ordered, courts, strict);
   const w1 = sched.waves[0];
 
   // 1) แถวตั้งค่าแบบกระชับ (ลดความเด่น)
@@ -413,13 +435,13 @@ function renderLineup(){
     <span class="lsetitem">จำนวนสนาม
       <span class="stepper"><button id="courtMinus">−</button><span class="val" id="courtVal">${courts}</span><button id="courtPlus">+</button></span>
     </span>
-    <span class="lsetitem">ไม่ตีติด 2 รอบ
-      <button class="toggle ${S.noConsecutive?'on':''}" id="noConsecToggle" style="width:auto">${S.noConsecutive?'เปิด':'ปิด'}</button>
+    <span class="lsetitem">ตีติด 2 รอบ
+      <button class="toggle ${S.allowConsec?'on':''}" id="noConsecToggle" style="width:auto">${S.allowConsec?'เปิด':'ปิด'}</button>
     </span>
   </div>`;
-  // เตือนเมื่อเปิดโหมดแต่คนไม่พอให้บังคับพักได้
-  if(S.noConsecutive && (!sched.rotates || sched.relaxed)){
-    html += `<div class="banner" style="margin-top:8px">คนไม่พอ โหมด “ไม่ตีติด” ทำงานไม่เต็มที่ — บางรอบต้องเล่นติดเพื่อไม่ให้สนามว่าง</div>`;
+  // โหมดเข้มงวด (ปิด) + ทีมสำรองไม่พอ -> เตือน ; โหมดปกติ (เปิด) ไม่เตือน
+  if(strict && (!sched.rotates || sched.relaxed)){
+    html += `<div class="banner" style="margin-top:8px">ทีมสำรองไม่พอ โหมด “ไม่ให้ตีติด” ทำงานไม่เต็มที่ — บางรอบต้องเล่นติดเพื่อไม่ให้สนามว่าง</div>`;
   }
 
   // 2) พระเอก: กำลังเล่น — การ์ดสนามเต็ม
@@ -459,7 +481,7 @@ function renderLineup(){
       html += `<button class="toggle collapse-btn ${lineupAllOpen?'open':''}" id="lineupAllToggle" style="width:100%;margin-top:9px;padding:9px 12px"><span>ดูลำดับทั้งหมด (${upcoming.length})</span><span class="arrow">▾</span></button>
         <div id="lineupAllBox" style="display:${lineupAllOpen?'block':'none'};margin-top:4px">`;
       upcoming.forEach((w,wi)=>{
-        html += `<div class="nextline"><span class="nlk">${wi+2}</span><span style="flex:1">${waveLine(w)}</span></div>`;
+        html += `<div class="nextline nl-item"><span class="nlk">${wi+2}</span><span style="flex:1">${waveLine(w)}</span></div>`;
       });
       html += `</div>`;
     }
@@ -472,7 +494,7 @@ function renderLineup(){
   box.innerHTML = html;
   document.getElementById('courtMinus').onclick = ()=>{ S.courtCount = Math.max(1,(S.courtCount||2)-1); refresh(); };
   document.getElementById('courtPlus').onclick = ()=>{ S.courtCount = (S.courtCount||2)+1; refresh(); };
-  document.getElementById('noConsecToggle').onclick = ()=>{ S.noConsecutive = !S.noConsecutive; refresh(); };
+  document.getElementById('noConsecToggle').onclick = ()=>{ S.allowConsec = !S.allowConsec; refresh(); };
   const allTg = document.getElementById('lineupAllToggle');
   if(allTg) allTg.onclick = function(){
     lineupAllOpen = !lineupAllOpen;
