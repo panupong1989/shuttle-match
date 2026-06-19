@@ -97,12 +97,26 @@
   .restchip .plus { color:#7E97A0; margin:0 1px; }
   .nextline { display:flex; align-items:flex-start; gap:10px; margin-top:11px; font-size:15.5px; color:#C7DCE2; line-height:1.7; }
   .nextline .nlk { color:#C6FF4A; font-family:'Oswald',sans-serif; letter-spacing:.06em; font-weight:700; flex:0 0 auto; font-size:15.5px; }
+  /* Round-Robin bracket */
+  .rr-round { margin-bottom:14px; }
+  .rr-rnum { font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; color:#7E97A0; letter-spacing:.1em; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .rr-rnum .rr-dot { width:22px; height:22px; border-radius:6px; background:rgba(198,255,74,.12); border:1px solid rgba(198,255,74,.32); display:inline-flex; align-items:center; justify-content:center; color:#C6FF4A; font-size:12px; }
+  .rr-match { display:flex; align-items:stretch; margin-bottom:6px; }
+  .rr-teams { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+  .rr-team { background:#0E222B; border:1px solid rgba(233,241,236,.16); border-radius:7px; padding:6px 10px; font-size:13px; display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rr-team .nm { overflow:hidden; text-overflow:ellipsis; }
+  .rr-bracket { width:16px; flex:0 0 16px; position:relative; }
+  .rr-bracket::before { content:''; position:absolute; top:25%; bottom:25%; right:0; width:8px; border:2px solid rgba(198,255,74,.4); border-left:none; border-radius:0 6px 6px 0; }
+  .rr-clabel { display:flex; align-items:center; font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:.08em; color:#C6FF4A; padding-left:6px; flex:0 0 auto; }
+  .rr-rest { font-size:11.5px; color:#FB7185; margin-top:2px; padding-left:2px; }
+  .rr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; }
   /* รายการ "ดูลำดับทั้งหมด" — แยกแต่ละรอบให้ชัด */
   .nl-item { padding:9px 2px; border-bottom:1px solid rgba(233,241,236,.10); margin-top:0; }
   .nl-item:last-child { border-bottom:none; }
   .nl-item .nlk { display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; border-radius:7px; background:rgba(198,255,74,.12); border:1px solid rgba(198,255,74,.32); font-size:14px; }
   /* view toggle / คิดเงิน */
-  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:9999; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  .menu-btn { height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .ilabel { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10px; color:#7E97A0; margin:0 2px 4px; }
   .ppick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .ppick .toggle { width:auto; }
@@ -117,11 +131,11 @@
 </style>
 </head>
 <body>
-<button class="menu-btn" id="menuBtn" aria-label="สลับวิว"><span id="menuBtnIcon">☰</span><span id="menuBtnLabel">คิดเงิน</span></button>
-
 <div class="wrap" id="billView" style="display:none">
-  <div class="eyebrow">Split the bill · ค่าก๊วน</div>
-  <div class="h1">คิด<span class="x">·</span>เงิน</div>
+  <div class="topbar">
+    <div><div class="eyebrow">Split the bill · ค่าก๊วน</div><div class="h1">คิด<span class="x">·</span>เงิน</div></div>
+    <button class="menu-btn" id="menuBtnBill" aria-label="กลับ"><span>←</span><span>กลับ</span></button>
+  </div>
   <div id="billRounds" class="mt16"></div>
   <button class="btn btn-ghost" id="addBillRound" style="margin-top:10px">+ เพิ่มรอบ</button>
   <button class="btn btn-primary mt9" id="calcBillBtn">💵 คิดเงิน</button>
@@ -129,8 +143,10 @@
 </div>
 
 <div class="wrap" id="mainView">
-  <div class="eyebrow">Badminton · จับคู่ตีแบต</div>
-  <div class="h1">SHUTTLE<span class="x">·</span>MATCH</div>
+  <div class="topbar">
+    <div><div class="eyebrow">Badminton · จับคู่ตีแบต</div><div class="h1">SHUTTLE<span class="x">·</span>MATCH</div></div>
+    <button class="menu-btn" id="menuBtnMain" aria-label="คิดเงิน"><span>☰</span><span>คิดเงิน</span></button>
+  </div>
 
   <div class="section-label" id="rosterLabel">ผู้เล่น</div>
   <div class="card">
@@ -408,57 +424,94 @@ function pairUpTeams(playTeams, met, lastMatch){
   for(let i=0;i+1<order.length;i+=2){ const k=mk(order[i],order[i+1]); met[k]=(met[k]||0)+1; pairs.add(k); }
   return { order, pairs };
 }
+/* Round-Robin: ทุกทีมเจอกันครบทุกคู่ ใช้ Circle Method
+   แบ่ง wave ตามจำนวนสนาม ถ้ารอบนั้นมีคู่มากกว่าสนาม จะแยกเป็นหลาย wave */
+function buildRoundRobin(teams, courts){
+  const n = teams.length;
+  if(n < 2) return { waves:[{ play: teams.slice(), rest: [] }], rotates:false };
+  // สร้างคู่ทั้งหมดด้วย Circle Method (ลำดับยุติธรรม)
+  const isOdd = n % 2 === 1;
+  const list = teams.slice();
+  if(isOdd) list.push(null);
+  const total = list.length;
+  const allMatches = [];
+  for(let r = 0; r < total - 1; r++){
+    for(let i = 0; i < total / 2; i++){
+      const a = list[i], b = list[total - 1 - i];
+      if(a && b) allMatches.push([a, b]);
+    }
+    const saved = list[total - 1];
+    for(let i = total - 1; i > 1; i--) list[i] = list[i - 1];
+    list[1] = saved;
+  }
+  // Greedy packing: ยัดคู่เต็มสนามทุก wave โดยทีมห้ามซ้ำใน wave เดียวกัน
+  const used = new Array(allMatches.length).fill(false);
+  const waves = [];
+  while(used.some(u=>!u)){
+    const waveMatches = [];
+    const waveTeams = new Set();
+    for(let i = 0; i < allMatches.length; i++){
+      if(used[i]) continue;
+      const [a, b] = allMatches[i];
+      if(waveTeams.has(a.key) || waveTeams.has(b.key)) continue;
+      waveMatches.push(i);
+      waveTeams.add(a.key);
+      waveTeams.add(b.key);
+      if(waveMatches.length >= courts) break;
+    }
+    const play = [];
+    waveMatches.forEach(i=>{ used[i]=true; play.push(allMatches[i][0], allMatches[i][1]); });
+    const playSet = new Set(play.map(t=>t.key));
+    waves.push({ play, rest: teams.filter(t=>!playSet.has(t.key)) });
+  }
+  return { waves, rotates: true };
+}
 /* คำนวณลำดับลงสนามล่วงหน้าเป็นรอบ ๆ (wave) จากลำดับทีม
-   ลำดับความสำคัญ: (1) ใครเล่น/ใครพัก ตามกติกาเดิม  (2) แล้วค่อยจัดคู่ต่อสู้ให้กระจาย
    - slots = courts*2 ทีมต่อรอบ; ที่เหลือ = พัก/รอคิว
    - เลือกทีมพัก "น้อยครั้งสุด/นานสุด" มาพักก่อนเสมอ (หมุนยุติธรรม)
-   - ห้ามทีมที่เพิ่งพักรอบก่อนถูกเลือกพักซ้ำ ถ้ายังมีทีมอื่นพักได้ (ไม่พัก 2 รอบติด)
-   - strict (โหมดปิด/เข้มงวด): พยายามให้ทีมที่เพิ่งเล่นได้พัก (ไม่เล่นติด) ; ตั้ง relaxed=true
-     เมื่อทีมสำรองไม่พอจนต้องปล่อยให้เล่นติด */
-function buildWaves(teams, courts, strict){
+   - ห้ามทีมที่เพิ่งพักรอบก่อนถูกเลือกพักซ้ำ ถ้ายังมีทีมอื่นพักได้ (ไม่พัก 2 รอบติด) */
+function buildWaves(teams, courts){
   const slots = courts*2;
   if(teams.length <= slots){
-    // ทุกทีมลงครบทุกสนาม ไม่มีคิวพัก (โหมดเข้มงวดถือว่าบังคับพักไม่ได้ -> สำรองไม่พอ)
-    return { waves:[{ play: teams.slice(), rest: [] }], relaxed:false, rotates:false };
+    return { waves:[{ play: teams.slice(), rest: [] }], rotates:false };
   }
   const restCount = teams.length - slots;
   const rested = {}, idx = {};
   teams.forEach((t,i)=>{ rested[t.key]=0; idx[t.key]=i; });
-  let lastRest = new Set();   // ทีมที่พักรอบก่อน
-  let lastPlay = new Set();   // ทีมที่เล่นรอบก่อน
-  const met = {}; let lastMatch = new Set(); // ประวัติคู่ต่อสู้เจอกัน (ภายในลำดับของรอบนี้)
-  const waves = []; let relaxed = false;
-  const maxWaves = Math.min(teams.length + 1, 8); // โชว์ให้เห็นการหมุนครบรอบ (จำกัดไม่ให้ยาวเกิน)
+  let lastRest = new Set();
+  const met = {}; let lastMatch = new Set();
+  const waves = [];
+  const maxWaves = Math.min(teams.length + 1, 8);
   for(let w=0; w<maxWaves; w++){
-    let resters;
-    if(strict){
-      // เข้มงวด: ให้ทีมที่เพิ่งเล่น (lastPlay) ได้พักก่อน แล้วค่อยทีมที่พักน้อยครั้งสุด
-      resters = teams.slice().sort((a,b)=>{
-        const pa = lastPlay.has(a.key)?0:1, pb = lastPlay.has(b.key)?0:1;
-        if(pa!==pb) return pa-pb;
-        return (rested[a.key]-rested[b.key]) || (idx[a.key]-idx[b.key]);
-      }).slice(0, restCount);
-    } else {
-      // ปกติ: หมุนพักยุติธรรม + ห้ามทีมที่เพิ่งพักถูกพักซ้ำถ้ามีทีมอื่น
-      resters = teams.slice().sort((a,b)=>{
-        const la = lastRest.has(a.key)?1:0, lb = lastRest.has(b.key)?1:0;
-        if(la!==lb) return la-lb;
-        return (rested[a.key]-rested[b.key]) || (idx[a.key]-idx[b.key]);
-      }).slice(0, restCount);
-    }
+    const resters = teams.slice().sort((a,b)=>{
+      const la = lastRest.has(a.key)?1:0, lb = lastRest.has(b.key)?1:0;
+      if(la!==lb) return la-lb;
+      return (rested[a.key]-rested[b.key]) || (idx[a.key]-idx[b.key]);
+    }).slice(0, restCount);
     const restSet = new Set(resters.map(t=>t.key));
-    const playTeams = teams.filter(t=>!restSet.has(t.key)); // (1) ใครเล่น (ยังไม่จัดคู่ต่อสู้)
+    const playTeams = teams.filter(t=>!restSet.has(t.key));
     const rest = resters.slice();
-    if(strict && w>0 && playTeams.some(t=>lastPlay.has(t.key))) relaxed = true; // มีทีมเล่นติด -> สำรองไม่พอ
-    // (2) จัดคู่ต่อสู้ให้กระจาย — ไม่กระทบว่าใครเล่น/ใครพัก
     const matched = pairUpTeams(playTeams, met, lastMatch);
     lastMatch = matched.pairs;
-    waves.push({ play: matched.order, rest });
+    // หมุนสนาม: สลับคู่ต่อสู้ไปสนามต่าง ๆ ในแต่ละ wave
+    const numPairs = Math.floor(matched.order.length / 2);
+    let rotatedPlay;
+    if(numPairs >= 2){
+      const rotateBy = w % numPairs;
+      rotatedPlay = [];
+      for(let i=0; i<numPairs; i++){
+        const ri = (i + rotateBy) % numPairs;
+        rotatedPlay.push(matched.order[ri*2], matched.order[ri*2+1]);
+      }
+      if(matched.order.length % 2) rotatedPlay.push(matched.order[matched.order.length-1]);
+    } else {
+      rotatedPlay = matched.order;
+    }
+    waves.push({ play: rotatedPlay, rest });
     rest.forEach(t=>{ rested[t.key]++; });
     lastRest = restSet;
-    lastPlay = new Set(playTeams.map(t=>t.key));
   }
-  return { waves, relaxed, rotates:true };
+  return { waves, rotates:true };
 }
 function renderLineup(){
   const box = document.getElementById('lineupBox');
@@ -468,8 +521,8 @@ function renderLineup(){
   const byes = (r && r.byes) ? r.byes : [];          // คนเศษ/คนพัก (ไม่มีคู่ทั้งรอบ)
   const courts = Math.max(1, S.courtCount||1);
   const ordered = orderedTeams(teams);
-  const strict = !S.allowConsec;
-  const sched = buildWaves(ordered, courts, strict);
+  const roundRobin = !S.allowConsec;
+  const sched = roundRobin ? buildRoundRobin(ordered, courts) : buildWaves(ordered, courts);
   const w1 = sched.waves[0];
 
   // 1) แถวตั้งค่าแบบกระชับ (ลดความเด่น)
@@ -478,14 +531,11 @@ function renderLineup(){
     <span class="lsetitem">จำนวนสนาม
       <span class="stepper"><button id="courtMinus">−</button><span class="val" id="courtVal">${courts}</span><button id="courtPlus">+</button></span>
     </span>
-    <span class="lsetitem">ตีติด 2 รอบ
-      <button class="toggle ${S.allowConsec?'on':''}" id="noConsecToggle" style="width:auto">${S.allowConsec?'เปิด':'ปิด'}</button>
+    <span class="lsetitem" style="gap:4px">
+      <button class="toggle ${S.allowConsec?'on':''}" id="modeNormal" style="width:auto">หมุนเวียน</button>
+      <button class="toggle ${S.allowConsec?'':'on'}" id="modeRR" style="width:auto">เจอกันครบ</button>
     </span>
   </div>`;
-  // โหมดเข้มงวด (ปิด) + ทีมสำรองไม่พอ -> เตือน ; โหมดปกติ (เปิด) ไม่เตือน
-  if(strict && (!sched.rotates || sched.relaxed)){
-    html += `<div class="banner" style="margin-top:8px">ทีมสำรองไม่พอ โหมด “ไม่ให้ตีติด” ทำงานไม่เต็มที่ — บางรอบต้องเล่นติดเพื่อไม่ให้สนามว่าง</div>`;
-  }
 
   // 2) พระเอก: กำลังเล่น — การ์ดสนามเต็ม
   html += `<div class="nowhead">🏸 กำลังเล่น</div>`;
@@ -519,10 +569,33 @@ function renderLineup(){
     return cs.join(' · ') + restTxt;
   };
   if(upcoming.length){
-    html += `<div class="nextline"><span class="nlk">ถัดไป →</span><span style="flex:1">${waveLine(upcoming[0])}</span></div>`;
-    if(upcoming.length>1){
-      // กางลำดับทุกรอบทิ้งไว้เสมอ (ไม่ต้องกดขยาย)
-      html += `<div class="section-label" style="margin:18px 4px 4px">ลำดับทั้งหมด</div><div>`;
+    html += `<div class="section-label" style="margin:18px 4px 4px">ลำดับทั้งหมด</div>`;
+    if(roundRobin){
+      html += `<div class="rr-grid">`;
+      upcoming.forEach((w,wi)=>{
+        html += `<div class="rr-round">`;
+        html += `<div class="rr-rnum"><span class="rr-dot">${wi+2}</span></div>`;
+        for(let c=0;c<courts;c++){
+          const t1=w.play[c*2], t2=w.play[c*2+1];
+          if(t1&&t2){
+            html += `<div class="rr-match">
+              <div class="rr-teams">
+                <div class="rr-team">${chip(t1.a.gender)}<span class="nm">${esc(t1.a.name)}</span><span class="plus" style="color:#7E97A0">+</span>${chip(t1.b.gender)}<span class="nm">${esc(t1.b.name)}</span></div>
+                <div class="rr-team">${chip(t2.a.gender)}<span class="nm">${esc(t2.a.name)}</span><span class="plus" style="color:#7E97A0">+</span>${chip(t2.b.gender)}<span class="nm">${esc(t2.b.name)}</span></div>
+              </div>
+              <div class="rr-bracket"></div>
+              <div class="rr-clabel">ส${c+1}</div>
+            </div>`;
+          }
+        }
+        if(w.rest.length){
+          html += `<div class="rr-rest">พัก: ${w.rest.map(t=>esc(teamName(t))).join(', ')}</div>`;
+        }
+        html += `</div>`;
+      });
+      html += `</div>`;
+    } else {
+      html += `<div>`;
       upcoming.forEach((w,wi)=>{
         html += `<div class="nextline nl-item"><span class="nlk">${wi+2}</span><span style="flex:1">${waveLine(w)}</span></div>`;
       });
@@ -531,13 +604,17 @@ function renderLineup(){
   }
 
   // 5) คำอธิบายย่อสั้น ๆ + สุ่มลำดับ
-  html += `<div class="tag" style="margin-top:12px;line-height:1.6">ลำดับคำนวณล่วงหน้า · ทีมพักนานสุดได้ขึ้นก่อน (ไม่อิงผลแพ้ชนะจริง)</div>
+  const modeDesc = roundRobin
+    ? `Round-Robin · ทุกทีมเจอกันครบทุกคู่ (${Math.ceil(ordered.length*(ordered.length-1)/2)} คู่)`
+    : `ลำดับคำนวณล่วงหน้า · ทีมพักนานสุดได้ขึ้นก่อน (ไม่อิงผลแพ้ชนะจริง)`;
+  html += `<div class="tag" style="margin-top:12px;line-height:1.6">${modeDesc}</div>
     <button class="btn btn-ghost mt12" id="reshuffleLineup">🔀 สุ่มลำดับใหม่</button>`;
 
   box.innerHTML = html;
   document.getElementById('courtMinus').onclick = ()=>{ S.courtCount = Math.max(1,(S.courtCount||2)-1); refresh(); };
   document.getElementById('courtPlus').onclick = ()=>{ S.courtCount = (S.courtCount||2)+1; refresh(); };
-  document.getElementById('noConsecToggle').onclick = ()=>{ S.allowConsec = !S.allowConsec; refresh(); };
+  document.getElementById('modeNormal').onclick = ()=>{ S.allowConsec = true; refresh(); };
+  document.getElementById('modeRR').onclick = ()=>{ S.allowConsec = false; refresh(); };
   document.getElementById('reshuffleLineup').onclick = ()=>{
     const n = S.rounds[S.rounds.length-1].n;
     S.lineup = { n, order: shuffle(teams.map(t=>t.key)) };
@@ -589,12 +666,9 @@ function setView(toBill){
   billView = toBill;
   document.getElementById('mainView').style.display = toBill ? 'none' : 'block';
   document.getElementById('billView').style.display = toBill ? 'block' : 'none';
-  document.getElementById('menuBtnIcon').textContent = toBill ? '←' : '☰';
-  document.getElementById('menuBtnLabel').textContent = toBill ? 'กลับ' : 'คิดเงิน';
   if(toBill) renderBilling();
   window.scrollTo(0,0);
 }
-function toggleView(){ setView(!billView); }
 function addBillRound(){
   S.billing.rounds.push({ courts:'', hours:'', courtPrice:'', people:[...S.present], shuttlesBy:{}, shuttlePriceBy:{}, courtPaidBy:'' });
   save(); renderBilling();
@@ -780,9 +854,8 @@ document.getElementById('howToggle').onclick = function(){
   this.classList.toggle('open', open);
 };
 
-// view toggle "คิดเงิน" — ย้ายปุ่มไปเป็นลูกตรงของ body กัน parent ที่มี transform/overflow ทำให้ fixed เพี้ยน
-document.body.appendChild(document.getElementById('menuBtn'));
-document.getElementById('menuBtn').onclick = toggleView;
+document.getElementById('menuBtnMain').onclick = ()=> setView(true);
+document.getElementById('menuBtnBill').onclick = ()=> setView(false);
 document.getElementById('addBillRound').onclick = addBillRound;
 document.getElementById('calcBillBtn').onclick = renderBillResult;
 document.getElementById('billRounds').addEventListener('input', e=>{
