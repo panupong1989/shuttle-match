@@ -102,7 +102,7 @@
   .nl-item:last-child { border-bottom:none; }
   .nl-item .nlk { display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; border-radius:7px; background:rgba(198,255,74,.12); border:1px solid rgba(198,255,74,.32); font-size:14px; }
   /* view toggle / คิดเงิน */
-  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:1000; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  .menu-btn { position:fixed; top:max(12px,env(safe-area-inset-top)); right:14px; z-index:9999; height:38px; padding:0 13px; border-radius:11px; background:#102A33; border:1px solid rgba(233,241,236,.16); color:#C6FF4A; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.08em; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 14px rgba(0,0,0,.35); }
   .ilabel { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10px; color:#7E97A0; margin:0 2px 4px; }
   .ppick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .ppick .toggle { width:auto; }
@@ -369,7 +369,47 @@ function teamHTML(t){
   return `<div class="team">${chip(t.a.gender)}<span class="nm">${esc(t.a.name)}</span><span class="plus">+</span>${chip(t.b.gender)}<span class="nm">${esc(t.b.name)}</span></div>`;
 }
 const teamName = t => `${t.a.name}+${t.b.name}`;
+/* จับคู่ต่อสู้ในแต่ละรอบให้กระจาย (กัน "เจอหน้าเดิมซ้ำ")
+   - เลือกการจับคู่ที่ผลรวม "เคยเจอกัน" (met) น้อยสุด + เลี่ยง rematch ทีมเดิมติดกัน (lastMatch)
+   - คืน order ที่เรียงให้คู่ต่อสู้อยู่ติดกัน (play[0]vs[1], play[2]vs[3], ...) ให้ render เดิมใช้ได้เลย
+   - mutate met (เพิ่มสถิติเจอกัน) แล้วคืน set ของคู่รอบนี้ไว้ทำ lastMatch รอบถัดไป */
+function pairUpTeams(playTeams, met, lastMatch){
+  const mk = (a,b)=> [a.key,b.key].sort().join('#');
+  const scoreOf = (a,b)=> (met[mk(a,b)]||0)*100 + (lastMatch.has(mk(a,b))?10:0);
+  const n = playTeams.length;
+  if(n < 2) return { order: playTeams.slice(), pairs: new Set() };
+  let order;
+  if(n%2===0 && n<=12){
+    // min-weight perfect matching แบบ brute-force (n เล็ก จับคู่สนามไม่กี่สนาม)
+    let best=null, bestScore=Infinity;
+    const rec=(rem, acc, sc)=>{
+      if(sc>=bestScore) return;
+      if(!rem.length){ best=acc.slice(); bestScore=sc; return; }
+      const first=rem[0];
+      for(let i=1;i<rem.length;i++){
+        const rest=rem.filter((_,k)=>k!==0 && k!==i);
+        rec(rest, acc.concat([[first,rem[i]]]), sc+scoreOf(first,rem[i]));
+      }
+    };
+    rec(playTeams.slice(), [], 0);
+    order = best.reduce((a,p)=>a.concat(p), []);
+  } else {
+    // fallback: greedy จับคู่ที่เจอกันน้อยสุดก่อน (n ใหญ่/คี่)
+    const remaining = playTeams.slice(); order=[];
+    while(remaining.length>=2){
+      const a=remaining.shift();
+      let bi=0, bs=Infinity;
+      for(let i=0;i<remaining.length;i++){ const s=scoreOf(a,remaining[i]); if(s<bs){bs=s;bi=i;} }
+      order.push(a, remaining.splice(bi,1)[0]);
+    }
+    if(remaining.length) order.push(remaining[0]);
+  }
+  const pairs = new Set();
+  for(let i=0;i+1<order.length;i+=2){ const k=mk(order[i],order[i+1]); met[k]=(met[k]||0)+1; pairs.add(k); }
+  return { order, pairs };
+}
 /* คำนวณลำดับลงสนามล่วงหน้าเป็นรอบ ๆ (wave) จากลำดับทีม
+   ลำดับความสำคัญ: (1) ใครเล่น/ใครพัก ตามกติกาเดิม  (2) แล้วค่อยจัดคู่ต่อสู้ให้กระจาย
    - slots = courts*2 ทีมต่อรอบ; ที่เหลือ = พัก/รอคิว
    - เลือกทีมพัก "น้อยครั้งสุด/นานสุด" มาพักก่อนเสมอ (หมุนยุติธรรม)
    - ห้ามทีมที่เพิ่งพักรอบก่อนถูกเลือกพักซ้ำ ถ้ายังมีทีมอื่นพักได้ (ไม่พัก 2 รอบติด)
@@ -386,6 +426,7 @@ function buildWaves(teams, courts, strict){
   teams.forEach((t,i)=>{ rested[t.key]=0; idx[t.key]=i; });
   let lastRest = new Set();   // ทีมที่พักรอบก่อน
   let lastPlay = new Set();   // ทีมที่เล่นรอบก่อน
+  const met = {}; let lastMatch = new Set(); // ประวัติคู่ต่อสู้เจอกัน (ภายในลำดับของรอบนี้)
   const waves = []; let relaxed = false;
   const maxWaves = Math.min(teams.length + 1, 8); // โชว์ให้เห็นการหมุนครบรอบ (จำกัดไม่ให้ยาวเกิน)
   for(let w=0; w<maxWaves; w++){
@@ -406,13 +447,16 @@ function buildWaves(teams, courts, strict){
       }).slice(0, restCount);
     }
     const restSet = new Set(resters.map(t=>t.key));
-    const play = teams.filter(t=>!restSet.has(t.key));
+    const playTeams = teams.filter(t=>!restSet.has(t.key)); // (1) ใครเล่น (ยังไม่จัดคู่ต่อสู้)
     const rest = resters.slice();
-    if(strict && w>0 && play.some(t=>lastPlay.has(t.key))) relaxed = true; // มีทีมเล่นติด -> สำรองไม่พอ
-    waves.push({ play, rest });
+    if(strict && w>0 && playTeams.some(t=>lastPlay.has(t.key))) relaxed = true; // มีทีมเล่นติด -> สำรองไม่พอ
+    // (2) จัดคู่ต่อสู้ให้กระจาย — ไม่กระทบว่าใครเล่น/ใครพัก
+    const matched = pairUpTeams(playTeams, met, lastMatch);
+    lastMatch = matched.pairs;
+    waves.push({ play: matched.order, rest });
     rest.forEach(t=>{ rested[t.key]++; });
     lastRest = restSet;
-    lastPlay = new Set(play.map(t=>t.key));
+    lastPlay = new Set(playTeams.map(t=>t.key));
   }
   return { waves, relaxed, rotates:true };
 }
@@ -743,7 +787,8 @@ document.getElementById('howToggle').onclick = function(){
   this.classList.toggle('open', open);
 };
 
-// view toggle "คิดเงิน"
+// view toggle "คิดเงิน" — ย้ายปุ่มไปเป็นลูกตรงของ body กัน parent ที่มี transform/overflow ทำให้ fixed เพี้ยน
+document.body.appendChild(document.getElementById('menuBtn'));
 document.getElementById('menuBtn').onclick = toggleView;
 document.getElementById('addBillRound').onclick = addBillRound;
 document.getElementById('calcBillBtn').onclick = renderBillResult;
