@@ -109,6 +109,9 @@
   .rr-bracket::before { content:''; position:absolute; top:25%; bottom:25%; right:0; width:8px; border:2px solid rgba(198,255,74,.4); border-left:none; border-radius:0 6px 6px 0; }
   .rr-clabel { display:flex; align-items:center; font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:.08em; color:#C6FF4A; padding-left:6px; flex:0 0 auto; }
   .rr-rest { font-size:11.5px; color:#FB7185; margin-top:2px; padding-left:2px; }
+  .rr-sub { font-size:12px; color:#38BDF8; margin-top:4px; padding:5px 8px; background:rgba(56,189,248,.08); border:1px solid rgba(56,189,248,.2); border-radius:7px; }
+  .sub-box { background:rgba(56,189,248,.06); border:1px solid rgba(56,189,248,.2); border-radius:12px; padding:10px 12px; margin-top:10px; }
+  .sub-box .sub-h { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10.5px; color:#38BDF8; margin-bottom:8px; }
   .rr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; }
   /* รายการ "ดูลำดับทั้งหมด" — แยกแต่ละรอบให้ชัด */
   .nl-item { padding:9px 2px; border-bottom:1px solid rgba(233,241,236,.10); margin-top:0; }
@@ -466,6 +469,44 @@ function buildRoundRobin(teams, courts){
   }
   return { waves, rotates: true };
 }
+/* Shift Register: คนเศษเข้าแทนตำแหน่งแรก ทุกคนขยับ คนท้ายหลุดเป็นเศษใหม่
+   - anchors (ผู้เล่นตำแหน่งคู่) อยู่กับที่  shifters (ตำแหน่งคี่) หมุนวน
+   - ทุก wave ทีมเปลี่ยนองค์ประกอบ ทุกคนได้ลง ไม่มีใครนั่งดูยาว */
+function buildShiftRegister(teams, courts, bye){
+  const n = teams.length;
+  if(n < 2) return { waves:[], rotates:false };
+  const anchors = teams.map(t=>t.b);
+  let shifters = teams.map(t=>t.a);
+  let odd = bye;
+  const totalWaves = n + 1;
+  const waves = [];
+  let lastRestIdx = -1;
+  for(let w = 0; w < totalWaves; w++){
+    const curTeams = anchors.map((a,i)=>({
+      a: shifters[i], b: a,
+      key: [shifters[i].id,a.id].sort().join('|'),
+      mixed: shifters[i].gender !== a.gender
+    }));
+    const slots = courts * 2;
+    let play, rest;
+    if(curTeams.length <= slots){
+      play = curTeams.slice(); rest = [];
+    } else {
+      const restCount = curTeams.length - slots;
+      let restStart = (lastRestIdx + 1) % n;
+      rest = [];
+      for(let r = 0; r < restCount; r++) rest.push(curTeams[(restStart + r) % n]);
+      lastRestIdx = (restStart + restCount - 1) % n;
+      const restKeys = new Set(rest.map(t=>t.key));
+      play = curTeams.filter(t=>!restKeys.has(t.key));
+    }
+    waves.push({ play, rest, odd });
+    const newOdd = shifters[n - 1];
+    shifters = [odd, ...shifters.slice(0, n - 1)];
+    odd = newOdd;
+  }
+  return { waves, rotates: true, isShift: true };
+}
 /* คำนวณลำดับลงสนามล่วงหน้าเป็นรอบ ๆ (wave) จากลำดับทีม
    - slots = courts*2 ทีมต่อรอบ; ที่เหลือ = พัก/รอคิว
    - เลือกทีมพัก "น้อยครั้งสุด/นานสุด" มาพักก่อนเสมอ (หมุนยุติธรรม)
@@ -522,7 +563,9 @@ function renderLineup(){
   const courts = Math.max(1, S.courtCount||1);
   const ordered = orderedTeams(teams);
   const roundRobin = !S.allowConsec;
-  const sched = roundRobin ? buildRoundRobin(ordered, courts) : buildWaves(ordered, courts);
+  const sched = roundRobin
+    ? (byes.length ? buildShiftRegister(ordered, courts, byes[0]) : buildRoundRobin(ordered, courts))
+    : buildWaves(ordered, courts);
   const w1 = sched.waves[0];
 
   // 1) แถวตั้งค่าแบบกระชับ (ลดความเด่น)
@@ -548,14 +591,19 @@ function renderLineup(){
     html += `</div>`;
   }
 
-  // 3) กล่องเดียว: พัก/รอคิว รอบนี้ — รวมคนเศษ + ทีมที่ไม่ได้ลง
+  // 3) กล่องเดียว: พัก/รอคิว รอบนี้
+  const isShift = sched.isShift;
   const restChips = [];
-  byes.forEach(b=>{ restChips.push(`<span class="restchip">${chip(b.gender)}<span>${esc(b.name)}</span></span>`); });
-  w1.rest.forEach(t=>{ restChips.push(`<span class="restchip">${chip(t.a.gender)}<span>${esc(t.a.name)}</span><span class="plus">+</span>${chip(t.b.gender)}<span>${esc(t.b.name)}</span></span>`); });
+  if(!isShift) byes.forEach(b=>{ restChips.push(`<span class="restchip">${chip(b.gender)}<span>${esc(b.name)}</span></span>`); });
+  w1.rest.forEach(t=>{
+    restChips.push(`<span class="restchip">${chip(t.a.gender)}<span>${esc(t.a.name)}</span><span class="plus">+</span>${chip(t.b.gender)}<span>${esc(t.b.name)}</span></span>`);
+  });
+  if(isShift && w1.odd){
+    restChips.push(`<span class="restchip" style="border-color:rgba(56,189,248,.3)">${chip(w1.odd.gender)}<span>${esc(w1.odd.name)}</span><span style="color:#38BDF8;font-size:10px;margin-left:4px">เศษ</span></span>`);
+  }
   if(restChips.length){
-    const cnt = byes.length + w1.rest.length;
     html += `<div class="restbox">
-      <div class="rh">พัก / รอคิว รอบนี้ · ${cnt}</div>
+      <div class="rh">พัก / รอคิว รอบนี้ · ${restChips.length}</div>
       <div class="restchips">${restChips.join('')}</div>
     </div>`;
   }
@@ -588,8 +636,10 @@ function renderLineup(){
             </div>`;
           }
         }
-        if(w.rest.length){
-          html += `<div class="rr-rest">พัก: ${w.rest.map(t=>esc(teamName(t))).join(', ')}</div>`;
+        const restParts = w.rest.map(t=>esc(teamName(t)));
+        if(isShift && w.odd) restParts.push(`<span style="color:#38BDF8">${esc(w.odd.name)}(เศษ)</span>`);
+        if(restParts.length){
+          html += `<div class="rr-rest">พัก: ${restParts.join(', ')}</div>`;
         }
         html += `</div>`;
       });
@@ -604,7 +654,9 @@ function renderLineup(){
   }
 
   // 5) คำอธิบายย่อสั้น ๆ + สุ่มลำดับ
-  const modeDesc = roundRobin
+  const modeDesc = isShift
+    ? `Shift Register · คนเศษเข้าแทนทีมแรก ทุกคนขยับ ${sched.waves.length} รอบวนครบ`
+    : roundRobin
     ? `Round-Robin · ทุกทีมเจอกันครบทุกคู่ (${Math.ceil(ordered.length*(ordered.length-1)/2)} คู่)`
     : `ลำดับคำนวณล่วงหน้า · ทีมพักนานสุดได้ขึ้นก่อน (ไม่อิงผลแพ้ชนะจริง)`;
   html += `<div class="tag" style="margin-top:12px;line-height:1.6">${modeDesc}</div>
