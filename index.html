@@ -460,7 +460,6 @@ function buildWaves(teams, courts, strict){
   }
   return { waves, relaxed, rotates:true };
 }
-let lineupAllOpen = false;
 function renderLineup(){
   const box = document.getElementById('lineupBox');
   const teams = currentTeams();
@@ -522,8 +521,8 @@ function renderLineup(){
   if(upcoming.length){
     html += `<div class="nextline"><span class="nlk">ถัดไป →</span><span style="flex:1">${waveLine(upcoming[0])}</span></div>`;
     if(upcoming.length>1){
-      html += `<button class="toggle collapse-btn ${lineupAllOpen?'open':''}" id="lineupAllToggle" style="width:100%;margin-top:9px;padding:9px 12px"><span>ดูลำดับทั้งหมด (${upcoming.length})</span><span class="arrow">▾</span></button>
-        <div id="lineupAllBox" style="display:${lineupAllOpen?'block':'none'};margin-top:4px">`;
+      // กางลำดับทุกรอบทิ้งไว้เสมอ (ไม่ต้องกดขยาย)
+      html += `<div class="section-label" style="margin:18px 4px 4px">ลำดับทั้งหมด</div><div>`;
       upcoming.forEach((w,wi)=>{
         html += `<div class="nextline nl-item"><span class="nlk">${wi+2}</span><span style="flex:1">${waveLine(w)}</span></div>`;
       });
@@ -539,12 +538,6 @@ function renderLineup(){
   document.getElementById('courtMinus').onclick = ()=>{ S.courtCount = Math.max(1,(S.courtCount||2)-1); refresh(); };
   document.getElementById('courtPlus').onclick = ()=>{ S.courtCount = (S.courtCount||2)+1; refresh(); };
   document.getElementById('noConsecToggle').onclick = ()=>{ S.allowConsec = !S.allowConsec; refresh(); };
-  const allTg = document.getElementById('lineupAllToggle');
-  if(allTg) allTg.onclick = function(){
-    lineupAllOpen = !lineupAllOpen;
-    document.getElementById('lineupAllBox').style.display = lineupAllOpen?'block':'none';
-    this.classList.toggle('open', lineupAllOpen);
-  };
   document.getElementById('reshuffleLineup').onclick = ()=>{
     const n = S.rounds[S.rounds.length-1].n;
     S.lineup = { n, order: shuffle(teams.map(t=>t.key)) };
