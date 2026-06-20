@@ -117,6 +117,18 @@
   .sub-box { background:rgba(56,189,248,.06); border:1px solid rgba(56,189,248,.2); border-radius:12px; padding:10px 12px; margin-top:10px; }
   .sub-box .sub-h { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:10.5px; color:#38BDF8; margin-bottom:8px; }
   .rr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; }
+  /* live control mode */
+  .mode-sw { display:flex; gap:6px; background:#0E222B; border:1px solid rgba(233,241,236,.16); border-radius:11px; padding:5px; margin-bottom:12px; }
+  .mode-sw button { flex:1; font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.06em; font-size:11px; border:none; border-radius:8px; padding:9px 6px; cursor:pointer; background:transparent; color:#7E97A0; white-space:nowrap; }
+  .mode-sw button.on { background:#C6FF4A; color:#0a1411; font-weight:700; }
+  .live-court { background:#0E222B; border:1px solid rgba(198,255,74,.5); border-radius:14px; padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 0 0 1px rgba(198,255,74,.10), 0 6px 18px rgba(0,0,0,.25); }
+  .live-ch { font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.14em; font-size:11.5px; color:#C6FF4A; padding:10px 13px 0; }
+  .live-team-row { display:flex; align-items:center; gap:8px; padding:8px 12px; }
+  .live-team-row .team { flex:1; }
+  .live-win { font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.06em; padding:8px 14px; border-radius:9px; border:1px solid rgba(198,255,74,.4); background:rgba(198,255,74,.08); color:#C6FF4A; cursor:pointer; flex:0 0 auto; transition:transform .06s ease,background .15s ease; }
+  .live-win:active { transform:scale(.94); background:rgba(198,255,74,.2); }
+  .live-streak { font-size:11px; color:#7E97A0; padding:2px 13px 10px; }
+  .live-msg { font-size:12px; color:#FB7185; padding:8px 12px; background:rgba(251,113,133,.06); border:1px solid rgba(251,113,133,.18); border-radius:8px; margin-bottom:10px; }
   /* รายการ "ดูลำดับทั้งหมด" — แยกแต่ละรอบให้ชัด */
   .nl-item { padding:9px 2px; border-bottom:1px solid rgba(233,241,236,.10); margin-top:0; }
   .nl-item:last-child { border-bottom:none; }
@@ -224,6 +236,8 @@ if(typeof S.allowConsec !== 'boolean'){
   S.allowConsec = (typeof S.noConsecutive==='boolean') ? !S.noConsecutive : true;
 }
 if(!('lineup' in S)) S.lineup = null;
+if(typeof S.liveMode !== 'boolean') S.liveMode = false;
+if(!S.liveState) S.liveState = null;
 if(!S.billing) S.billing = { rounds:[] };
 // migrate billing rounds: per-person shuttle price + court payer (new features)
 S.billing.rounds.forEach(r=>{
@@ -564,10 +578,214 @@ function buildWaves(teams, courts){
   }
   return { waves, rotates:true };
 }
+/* ---------------- โหมดคุมสด (live control) ---------------- */
+function initLiveState(){
+  const teams = currentTeams();
+  if(!teams || teams.length < 2) return;
+  const r = S.rounds[S.rounds.length-1];
+  const courts = Math.max(1, S.courtCount||1);
+  const ordered = orderedTeams(teams);
+
+  const teamMap = {};
+  ordered.forEach(t => {
+    teamMap[t.key] = { a:t.a, b:t.b, key:t.key, mixed:t.mixed, totalGames:0, streak:0, lastOpponentKey:null };
+  });
+
+  const allKeys = ordered.map(t=>t.key);
+  const courtSlots = Math.min(courts, Math.floor(allKeys.length / 2));
+  const courtMatches = [];
+  for(let i=0; i<courtSlots; i++){
+    courtMatches.push({ team1Key:allKeys[i*2], team2Key:allKeys[i*2+1] });
+  }
+  const queue = allKeys.slice(courtSlots * 2);
+
+  S.liveState = {
+    courts: courtMatches,
+    queue: queue,
+    teams: teamMap,
+    undoStack: [],
+    roundN: r ? r.n : 0
+  };
+  save();
+}
+
+function handleWin(courtIdx, winnerPos){
+  const ls = S.liveState;
+  if(!ls || courtIdx >= ls.courts.length) return;
+
+  ls.undoStack.push(JSON.parse(JSON.stringify({ courts:ls.courts, queue:ls.queue, teams:ls.teams })));
+  if(ls.undoStack.length > 10) ls.undoStack.shift();
+
+  const court = ls.courts[courtIdx];
+  const winKey = winnerPos === 0 ? court.team1Key : court.team2Key;
+  const loseKey = winnerPos === 0 ? court.team2Key : court.team1Key;
+  const cap = S.allowConsec ? 2 : 1;
+
+  ls.teams[loseKey].totalGames++;
+  ls.teams[loseKey].streak = 0;
+  ls.teams[winKey].totalGames++;
+  ls.teams[winKey].streak++;
+  ls.teams[winKey].lastOpponentKey = loseKey;
+  ls.teams[loseKey].lastOpponentKey = winKey;
+
+  ls.queue.push(loseKey);
+
+  if(ls.teams[winKey].streak >= cap){
+    ls.teams[winKey].streak = 0;
+    ls.queue.push(winKey);
+    if(ls.queue.length >= 2){
+      court.team1Key = ls.queue.shift();
+      court.team2Key = ls.queue.shift();
+    } else if(ls.queue.length === 1){
+      court.team1Key = ls.queue.shift();
+      court.team2Key = winKey;
+    }
+  } else {
+    if(ls.queue.length > 0){
+      let nextIdx = 0;
+      if(ls.queue.length > 1 && ls.teams[ls.queue[0]].lastOpponentKey === winKey){
+        for(let i=1; i<ls.queue.length; i++){
+          if(ls.teams[ls.queue[i]].lastOpponentKey !== winKey){ nextIdx = i; break; }
+        }
+      }
+      const newKey = ls.queue.splice(nextIdx, 1)[0];
+      if(winnerPos === 0) court.team2Key = newKey;
+      else court.team1Key = newKey;
+    }
+  }
+
+  save();
+  renderLineup();
+}
+
+function undoLive(){
+  const ls = S.liveState;
+  if(!ls || !ls.undoStack.length) return;
+  const snap = ls.undoStack.pop();
+  ls.courts = snap.courts;
+  ls.queue = snap.queue;
+  ls.teams = snap.teams;
+  save();
+  renderLineup();
+}
+
+function liveCourtChange(delta){
+  const ls = S.liveState;
+  if(!ls) return;
+  const newCount = Math.max(1, ls.courts.length + delta);
+  if(newCount === ls.courts.length) return;
+
+  if(delta > 0){
+    if(ls.queue.length >= 2){
+      ls.courts.push({ team1Key:ls.queue.shift(), team2Key:ls.queue.shift() });
+    } else return;
+  } else {
+    if(ls.courts.length > 1){
+      const removed = ls.courts.pop();
+      ls.queue.unshift(removed.team2Key);
+      ls.queue.unshift(removed.team1Key);
+    } else return;
+  }
+
+  S.courtCount = ls.courts.length;
+  save();
+  renderLineup();
+}
+
+function renderLiveMode(){
+  const ls = S.liveState;
+  const box = document.getElementById('lineupBox');
+  if(!ls){ box.innerHTML = `<div class="section-label">ลงสนาม</div><div class="empty">ยังไม่มีทีม — สุ่มคู่ก่อน</div>`; return; }
+
+  const courts = ls.courts.length;
+  const cap = S.allowConsec ? 2 : 1;
+  const totalTeams = Object.keys(ls.teams).length;
+  const relaxMode = totalTeams <= courts * 2;
+
+  let html = `<div class="section-label">ลงสนาม</div>`;
+  html += `<div class="mode-sw">
+    <button id="modeReadOnly">อ่านอย่างเดียว</button>
+    <button id="modeLive" class="on">คุมสด</button>
+  </div>`;
+
+  html += `<div class="lset">
+    <span class="lsetitem">จำนวนสนาม
+      <span class="stepper"><button id="courtMinus">−</button><span class="val" id="courtVal">${courts}</span><button id="courtPlus">+</button></span>
+    </span>
+    <span class="lsetitem" style="gap:4px">
+      <button class="toggle ${S.allowConsec?'on':''}" id="modeNormal" style="width:auto">กินสนาม 2</button>
+      <button class="toggle ${S.allowConsec?'':'on'}" id="modeRR" style="width:auto">กินสนาม 1</button>
+    </span>
+  </div>`;
+
+  if(relaxMode) html += `<div class="live-msg">คนไม่พอ บางสนามเล่นต่อเนื่อง</div>`;
+
+  html += `<div class="nowhead">🏸 กำลังเล่น</div>`;
+  ls.courts.forEach((court, ci) => {
+    const t1 = ls.teams[court.team1Key];
+    const t2 = ls.teams[court.team2Key];
+    const s1 = t1.streak, s2 = t2.streak;
+    const streakText = s1 > 0 ? `${esc(t1.a.name)}+${esc(t1.b.name)} อยู่มา ${s1} เกม` : s2 > 0 ? `${esc(t2.a.name)}+${esc(t2.b.name)} อยู่มา ${s2} เกม` : '';
+
+    html += `<div class="live-court">
+      <div class="live-ch">สนาม ${ci+1}</div>
+      <div class="live-team-row">
+        <div class="team" style="flex:1">${chip(t1.a.gender)}<span class="nm">${esc(t1.a.name)}</span><span class="plus">+</span>${chip(t1.b.gender)}<span class="nm">${esc(t1.b.name)}</span></div>
+        <button class="live-win" data-court="${ci}" data-winner="0">🏆 ชนะ</button>
+      </div>
+      <div class="vs">VS</div>
+      <div class="live-team-row">
+        <div class="team" style="flex:1">${chip(t2.a.gender)}<span class="nm">${esc(t2.a.name)}</span><span class="plus">+</span>${chip(t2.b.gender)}<span class="nm">${esc(t2.b.name)}</span></div>
+        <button class="live-win" data-court="${ci}" data-winner="1">🏆 ชนะ</button>
+      </div>
+      ${streakText ? `<div class="live-streak">${streakText}</div>` : ''}
+    </div>`;
+  });
+
+  if(ls.queue.length){
+    html += `<div class="section-label" style="margin:14px 4px 8px">คิวรอ · ${ls.queue.length} ทีม</div>`;
+    ls.queue.forEach((key, qi) => {
+      const t = ls.teams[key];
+      html += `<div class="qrow"><span class="pairidx">${qi+1}</span>${teamHTML(t)}</div>`;
+    });
+  }
+
+  html += `<div class="row2 mt12">
+    <button class="btn btn-ghost grow" id="undoLiveBtn" ${ls.undoStack.length?'':'disabled'}>↶ ย้อนผลล่าสุด${ls.undoStack.length?' ('+ls.undoStack.length+')':''}</button>
+    <button class="btn btn-ghost grow" id="resetLiveBtn">⟲ เริ่มคุมสดใหม่</button>
+  </div>`;
+
+  const capLabel = cap === 2 ? 'กินสนามได้ 2 เกม แล้วพัก' : 'ชนะแล้วพักทันที';
+  html += `<div class="tag" style="margin-top:12px;line-height:1.6">โหมดคุมสด · ${capLabel} · สนามวิ่งอิสระ</div>`;
+
+  box.innerHTML = html;
+
+  document.getElementById('modeReadOnly').onclick = ()=>{ S.liveMode = false; save(); renderLineup(); };
+  document.getElementById('modeLive').onclick = ()=>{ S.liveMode = true; save(); renderLineup(); };
+  document.getElementById('courtMinus').onclick = ()=> liveCourtChange(-1);
+  document.getElementById('courtPlus').onclick = ()=> liveCourtChange(1);
+  document.getElementById('modeNormal').onclick = ()=>{ S.allowConsec = true; save(); renderLineup(); };
+  document.getElementById('modeRR').onclick = ()=>{ S.allowConsec = false; save(); renderLineup(); };
+  document.getElementById('undoLiveBtn').onclick = undoLive;
+  document.getElementById('resetLiveBtn').onclick = ()=>{ initLiveState(); renderLineup(); };
+  box.querySelectorAll('.live-win').forEach(btn => {
+    btn.onclick = ()=> handleWin(+btn.dataset.court, +btn.dataset.winner);
+  });
+}
+
 function renderLineup(){
   const box = document.getElementById('lineupBox');
   const teams = currentTeams();
   if(!teams){ box.innerHTML=''; return; }
+
+  // Live mode branch
+  if(S.liveMode){
+    const roundN = S.rounds.length ? S.rounds[S.rounds.length-1].n : 0;
+    if(!S.liveState || S.liveState.roundN !== roundN) initLiveState();
+    renderLiveMode();
+    return;
+  }
+
   const r = S.rounds[S.rounds.length-1];
   const byes = (r && r.byes) ? r.byes : [];          // คนเศษ/คนพัก (ไม่มีคู่ทั้งรอบ)
   const courts = Math.max(1, S.courtCount||1);
@@ -580,6 +798,10 @@ function renderLineup(){
 
   // 1) แถวตั้งค่าแบบกระชับ (ลดความเด่น)
   let html = `<div class="section-label">ลงสนาม</div>
+  <div class="mode-sw">
+    <button id="modeReadOnly" class="on">อ่านอย่างเดียว</button>
+    <button id="modeLive">คุมสด</button>
+  </div>
   <div class="lset">
     <span class="lsetitem">จำนวนสนาม
       <span class="stepper"><button id="courtMinus">−</button><span class="val" id="courtVal">${courts}</span><button id="courtPlus">+</button></span>
@@ -657,7 +879,16 @@ function renderLineup(){
     } else {
       html += `<div>`;
       upcoming.forEach((w,wi)=>{
-        html += `<div class="nextline nl-item"><span class="nlk">${wi+2}</span><span style="flex:1">${waveLine(w)}</span></div>`;
+        html += `<div class="nl-item" style="padding:9px 2px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span class="nlk">${wi+2}</span><span style="font-family:'Oswald',sans-serif;font-size:12px;color:#7E97A0;letter-spacing:.08em">รอบ ${wi+2}</span></div>
+          <div style="padding-left:36px;font-size:14px;line-height:1.8;color:#C7DCE2">`;
+        for(let c=0;c<courts;c++){
+          const a=w.play[c*2], b=w.play[c*2+1];
+          if(a&&b) html += `<div>สนาม ${c+1}: ${esc(teamName(a))} vs ${esc(teamName(b))}</div>`;
+        }
+        if(w.rest.length) html += `<div style="color:#FB7185">พัก: ${w.rest.map(teamName).map(esc).join(', ')}</div>`;
+        if(isShift && w.odd) html += `<div style="color:#38BDF8">เศษ: ${esc(w.odd.name)}</div>`;
+        html += `</div></div>`;
       });
       html += `</div>`;
     }
@@ -677,6 +908,8 @@ function renderLineup(){
   document.getElementById('courtPlus').onclick = ()=>{ S.courtCount = (S.courtCount||2)+1; refresh(); };
   document.getElementById('modeNormal').onclick = ()=>{ S.allowConsec = true; refresh(); };
   document.getElementById('modeRR').onclick = ()=>{ S.allowConsec = false; refresh(); };
+  document.getElementById('modeReadOnly').onclick = ()=>{ S.liveMode = false; save(); renderLineup(); };
+  document.getElementById('modeLive').onclick = ()=>{ S.liveMode = true; save(); renderLineup(); };
   document.getElementById('reshuffleLineup').onclick = ()=>{
     const n = S.rounds[S.rounds.length-1].n;
     S.lineup = { n, order: shuffle(teams.map(t=>t.key)) };
@@ -736,6 +969,7 @@ function commit(){
   draft.pairs.forEach(p=>S.history.push(pairKey(p.a.id,p.b.id)));
   S.rounds.push({ n:S.rounds.length+1, pairs:draft.pairs, byes:draft.byes, free:S.freeMode });
   draft.byes.forEach(p=>{ S.byeCounts[p.id]=(S.byeCounts[p.id]||0)+1; });
+  S.liveState = null;
   draft = null; refresh();
 }
 function undo(){
@@ -744,7 +978,7 @@ function undo(){
   if(last.byes) last.byes.forEach(p=>{ S.byeCounts[p.id]=Math.max(0,(S.byeCounts[p.id]||0)-1); });
   refresh();
 }
-function newSession(){ S.history=[]; S.rounds=[]; S.byeCounts={}; S.lineup=null; draft=null; refresh(); }
+function newSession(){ S.history=[]; S.rounds=[]; S.byeCounts={}; S.lineup=null; S.liveState=null; draft=null; refresh(); }
 function copyDraft(){
   if(!draft) return; const g=x=>x.gender==='M'?'ช':'ญ';
   const lines=[`🏸 รอบ ${S.rounds.length+1}${S.freeMode?' (ตามยถากรรม)':''}`];
