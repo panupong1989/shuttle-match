@@ -35,6 +35,10 @@
   .chip { font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; width:22px; height:22px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
   .chip-m { background:rgba(56,189,248,.18); color:#38BDF8; border:1px solid rgba(56,189,248,.4); }
   .chip-f { background:rgba(251,113,133,.18); color:#FB7185; border:1px solid rgba(251,113,133,.4); }
+  /* tappable gender chip in roster rows (กดสลับเพศได้) */
+  .chipbtn { font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; min-width:34px; height:32px; padding:0 8px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; cursor:pointer; transition:transform .06s ease; }
+  .chipbtn:active { transform:scale(.92); }
+  textarea.input { resize:vertical; line-height:1.6; min-height:120px; }
   .prow { display:flex; align-items:center; gap:9px; padding:8px 4px; border-bottom:1px solid rgba(233,241,236,.16); }
   .prow:last-child { border-bottom:none; }
   .pname { flex:1; font-size:15px; }
@@ -158,6 +162,12 @@
       <button class="toggle on" id="genderBtn" style="width:46px;font-size:14px">ช</button>
     </div>
     <button class="btn btn-ghost" id="addBtn">+ เพิ่มผู้เล่น</button>
+    <button class="toggle" id="pasteToggle" style="width:100%;margin-top:9px;padding:9px">📋 วางรายชื่อจากไลน์</button>
+    <div id="pasteBox" style="display:none;margin-top:9px">
+      <textarea class="input" id="pasteInput" rows="6" placeholder="วางข้อความนัดทั้งก้อนจากไลน์ที่นี่ (มีเลขลำดับ/วันเวลา/คอร์ท/ลิงก์ปนมาได้ ระบบจะคัดเฉพาะชื่อให้)"></textarea>
+      <button class="btn btn-primary" id="pasteBtn" style="margin-top:8px">เพิ่มรายชื่อจากข้อความ</button>
+      <div class="tag" id="pasteMsg" style="display:none;margin-top:6px"></div>
+    </div>
     <div id="rosterList" class="mt12"></div>
   </div>
 
@@ -281,7 +291,7 @@ function renderRoster(){
   list.innerHTML = S.roster.map(p=>{
     const on = S.present.includes(p.id);
     return `<div class="prow" style="opacity:${on?1:0.45}" data-id="${p.id}">
-      ${chip(p.gender)}<span class="pname">${esc(p.name)}</span>
+      <button class="chipbtn ${p.gender==='M'?'chip-m':'chip-f'}" data-act="gender" title="แตะเพื่อสลับเพศ">${p.gender==='M'?'ช':'ญ'}</button><span class="pname">${esc(p.name)}</span>
       <button class="toggle ${on?'on':''}" data-act="toggle">${on?'มา':'ไม่มา'}</button>
       <button class="del" data-act="del">×</button></div>`;
   }).join('');
@@ -681,6 +691,45 @@ function addPlayer(){
   const inp = document.getElementById('nameInput'); const nm = inp.value.trim(); if(!nm) return;
   const p = { id:uid(), name:nm, gender }; S.roster.push(p); S.present.push(p.id); inp.value=''; inp.focus(); refresh();
 }
+/* ---------------- วางรายชื่อจากข้อความนัด (paste import) ---------------- */
+function parsePastedNames(text){
+  if(!text) return [];
+  const out = [], seen = new Set();
+  // คำที่บอกว่าบรรทัดนี้ "ไม่ใช่ชื่อ" (หัวข้อ/วันเวลา/สถานที่)
+  const skipKw = /(คอร์ท|คอร์ด|court|สนาม|ค่าคอร์ท|ราคา|บาท|฿|เสาร์|อาทิตย์|จันทร์|อังคาร|พุธ|พฤหัส|ศุกร์|maps\.app|goo\.gl|line\.me)/i;
+  text.split(/\r?\n/).forEach(raw=>{
+    // ตัด emoji / สัญลักษณ์ภาพ ออกก่อน
+    let s = raw.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️‍]/gu,'').trim();
+    if(!s) return;                                                        // บรรทัดว่าง
+    if(/https?:\/\//i.test(s)) return;                                    // ลิงก์ url
+    if(/\d{1,2}[.:]\d{2}\s*[-–~]\s*\d{1,2}[.:]\d{2}/.test(s)) return;     // ช่วงเวลา 20.00-22.00
+    if(/^\d{1,2}[.:]\d{2}$/.test(s)) return;                              // เวลาเดี่ยว 20.00
+    if(/\d{1,2}\/\d{1,2}/.test(s)) return;                               // วันที่ 20/06
+    if(/^หรือ$/.test(s)) return;                                          // คำเชื่อม "หรือ"
+    if(/^นัด/.test(s)) return;                                            // บรรทัดหัวข้อนัด (นัด...)
+    if(skipKw.test(s)) return;                                            // หัวข้อ/วันเวลา/สถานที่
+    // ตัดเลขลำดับนำหน้า เช่น "1.", "2)", "3 ", "11.", bullet "-", "•"
+    s = s.replace(/^[\s•\-–•*]*\d+[\s.)\]:\-–]*\s*/, '').replace(/^[\s•\-–•*]+/, '').trim();
+    if(!s) return;                                                        // เหลือแต่เลข/บูลเล็ต
+    if(/^\d+$/.test(s)) return;                                          // เลขล้วน ไม่มีชื่อ
+    if(!/[A-Za-z฀-๿]/.test(s)) return;                         // ต้องมีตัวอักษรไทย/อังกฤษจริง
+    const key = s.toLowerCase();
+    if(seen.has(key)) return;                                            // กันชื่อซ้ำ
+    seen.add(key); out.push(s);
+  });
+  return out;
+}
+function showPasteMsg(t, ok){ const e=document.getElementById('pasteMsg'); if(!e) return; e.textContent=t; e.style.color=ok?'#C6FF4A':'#FB7185'; e.style.display='block'; }
+function importPasted(){
+  const ta = document.getElementById('pasteInput'); const names = parsePastedNames(ta.value);
+  if(!names.length){ showPasteMsg('ไม่พบชื่อในข้อความ ลองตรวจดูอีกครั้ง', false); return; }
+  if(!window.confirm('วางรายชื่อใหม่จะล้างรายชื่อเดิมทั้งหมด แล้วใช้ชุดนี้แทน ยืนยัน?')) return;
+  const players = names.map(n=>({ id:uid(), name:n, gender:'M' }));    // เริ่มต้นเพศชายทุกคน
+  S.roster = players; S.present = players.map(p=>p.id);                 // ทุกคน = มา อัตโนมัติ
+  S.history=[]; S.rounds=[]; S.byeCounts={}; S.lineup=null; draft=null; // ล้าง session เก่า (อ้างถึงคนเก่า)
+  ta.value=''; refresh();
+  showPasteMsg(`เพิ่มแล้ว ${players.length} คน · ติ๊กมา + เพศชายเริ่มต้น (แตะ ช/ญ ที่ชื่อเพื่อเปลี่ยนเพศ)`, true);
+}
 function roll(){ draft = generateRound(presentPlayers(), S.history, S.byeCounts, S.freeMode); renderDraft(); document.getElementById('draftBox').scrollIntoView({behavior:'smooth',block:'start'}); }
 function commit(){
   if(!draft) return;
@@ -888,8 +937,11 @@ document.getElementById('rosterList').addEventListener('click', e=>{
   const btn = e.target.closest('button'); if(!btn) return;
   const row = e.target.closest('.prow'); const id = row && row.dataset.id; if(!id) return;
   if(btn.dataset.act==='toggle'){ S.present = S.present.includes(id) ? S.present.filter(x=>x!==id) : [...S.present, id]; refresh(); }
+  else if(btn.dataset.act==='gender'){ const p=S.roster.find(x=>x.id===id); if(p){ p.gender = p.gender==='M'?'F':'M'; refresh(); } }
   else if(btn.dataset.act==='del'){ S.roster = S.roster.filter(p=>p.id!==id); S.present = S.present.filter(x=>x!==id); refresh(); }
 });
+document.getElementById('pasteToggle').onclick = function(){ const open=document.getElementById('pasteBox').style.display==='none'; document.getElementById('pasteBox').style.display=open?'block':'none'; this.classList.toggle('on',open); };
+document.getElementById('pasteBtn').onclick = importPasted;
 document.getElementById('modeRule').onclick = ()=>{ S.freeMode=false; draft=null; refresh(); };
 document.getElementById('modeFree').onclick = ()=>{ S.freeMode=true; draft=null; refresh(); };
 document.getElementById('rollBtn').onclick = ()=>{ if(presentPlayers().length<2){ return; } roll(); };
