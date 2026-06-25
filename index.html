@@ -962,6 +962,10 @@ function importPasted(){
   S.history=[]; S.rounds=[]; S.byeCounts={}; S.lineup=null; draft=null; // ล้าง session เก่า (อ้างถึงคนเก่า)
   ta.value=''; refresh();
   showPasteMsg(`เพิ่มแล้ว ${players.length} คน · ติ๊กมา + เพศชายเริ่มต้น (แตะ ช/ญ ที่ชื่อเพื่อเปลี่ยนเพศ)`, true);
+  // import สำเร็จ → หุบกล่องวางอัตโนมัติ (ยังกดปุ่ม "วางรายชื่อจากไลน์" เปิดกลับมาได้)
+  const box=document.getElementById('pasteBox'); if(box) box.style.display='none';
+  const tg=document.getElementById('pasteToggle'); if(tg) tg.classList.remove('on');
+  const msg=document.getElementById('pasteMsg'); if(msg) msg.style.display='none'; // เคลียร์ข้อความค้าง เผื่อเปิดใหม่
 }
 function roll(){ draft = generateRound(presentPlayers(), S.history, S.byeCounts, S.freeMode); renderDraft(); document.getElementById('draftBox').scrollIntoView({behavior:'smooth',block:'start'}); }
 function commit(){
